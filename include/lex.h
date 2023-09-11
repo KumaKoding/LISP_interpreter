@@ -15,7 +15,7 @@ enum type
     Div,
     Start,
     End,
-    Unknown
+    Word
 };
 
 struct token

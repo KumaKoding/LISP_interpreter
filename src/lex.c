@@ -134,7 +134,7 @@ struct token* lex(vector *input)
             }
             else
             {
-                curr->type = Unknown;
+                curr->type = Word;
             }
 
             curr->str = malloc(keyword->len);

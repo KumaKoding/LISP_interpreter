@@ -3,6 +3,14 @@
 
 #include "lex.h"
 
+typedef struct
+{
+    enum type node_type;
+
+    int len;
+    void *value;
+} term;
+
 typedef struct c_expr
 {
     enum type node_type;
@@ -10,8 +18,13 @@ typedef struct c_expr
     char *real_chars;
     int len; 
 
-    struct c_expr *leaf_1;
-    struct c_expr *leaf_2;
+    union
+    {
+        struct c_expr *intermediary;
+        term *end;
+    } *contents;
+    
+    int node_amount;
 } node;
 
 node *parse(struct token *tokens);
