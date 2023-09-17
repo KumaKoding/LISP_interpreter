@@ -14,155 +14,116 @@ typedef int bool;
 #define MUL "mul"
 #define DIV "div"
 
-bool match_keyword(vector *str, const char *keyword, int kw_size)
+int destruct_tokens(struct Token_vec *tokens)
 {
-    if(str->len == kw_size - 1)
+    for(int i = 0; i < tokens->len; i++)
     {
-        for(int i = 0; i < str->len; i++)
-        {
-            if(str->data[i] != keyword[i])
-            {
-                return false;
-            }
-        }
-
-        return true;
+        v_destruct(tokens->strs[i]);
     }
+    
+    free(tokens->strs);
+    free(tokens->toks);
 
-    return false;
-}
-
-int destruct_tokens(struct token *head)
-{
-    if(head == NULL) { return -1; }
-
-    struct token *old_node = head;
-    struct token *new_node = NULL;
-
-    do
-    {
-        new_node = old_node->next_token;
-
-        free(old_node->str);
-        free(old_node);
-
-        old_node = new_node;
-    } 
-    while(old_node->next_token != NULL);
+    free(tokens);
 
     return 0;
 }
 
-struct token* lex(vector *input)
+void append_token(struct Token_vec *tokens, enum type token, char *str, int len)
 {
-    struct token *start = malloc(sizeof(struct token));
-    start->type = Start;
-    start->str = malloc(1);
-    start->len = 1;
-
-    start->next_token = malloc(sizeof(struct token));
-    struct token *curr = start->next_token;
-
-    for(int i = 0; i < input->len; i++) 
+    if(tokens->len >= tokens->max)
     {
-        // printf("(%c, %d)", input->data[i], i);
+        tokens->toks = realloc(tokens->toks, tokens->max * 2 * sizeof(char));
+        tokens->strs = realloc(tokens->strs, tokens->max * 2 * sizeof(vector));
 
-        if(input->data[i] == '(')
+        tokens->max *= 2;
+    }
+
+
+    tokens->toks[tokens->len] = token;
+    tokens->strs[tokens->len] = init_vector();
+    
+    for(int i = 0; i < len; i++)
+    {
+        v_append(tokens->strs[tokens->len], str[i]);
+    }
+    printf(" ");
+
+    tokens->len++;
+}
+
+struct Token_vec *lex(vector *input)
+{
+    struct Token_vec *tokens = malloc(sizeof(struct Token_vec));
+
+    tokens->toks = malloc(8 * sizeof(enum type));
+    tokens->strs = malloc(8 * sizeof(vector));
+
+    tokens->max = 8;
+    tokens->len = 0;
+
+    for(int i = 0; i < input->len; i++)
+    {
+        if(input->data[i] == '(') { append_token(tokens, O_paren, "(", 1); }
+        if(input->data[i] == ')') { append_token(tokens, C_paren, ")", 1); }
+        if(input->data[i] == ' ') { append_token(tokens, Space, " ", 1); }
+        if(input->data[i] == '\n') { append_token(tokens, End, "", 0); }
+        if(input->data[i] <= '9' && input->data[i] >= '0') 
         {
-            curr->type = O_paren;
+            vector *tmp_str = init_vector();
 
-            curr->str = malloc(1);
-            curr->str[0] = '(';
-
-            curr->len = 1;
-        }
-        if(input->data[i] == ')')
-        {
-            curr->type = C_paren;
-
-            curr->str = malloc(1);
-            curr->str[0] = ')';
-
-            curr->len = 1;
-        }
-        if(input->data[i] == ' ')
-        {
-            curr->type = Space;
-
-            curr->str = malloc(1);
-            curr->str[0] = ' ';
-
-            curr->len = 1;
-        }
-        if(input->data[i] >= '0' && input->data[i] <= '9')
-        {
-            curr->type = Number;
-
-            curr->str = malloc(1);
-            curr->str[0] = input->data[i];
-
-            curr->len = 1;
-        }
-        if(input->data[i] >= 'a' && input->data[i] <= 'z')
-        {
-            vector *keyword = init_vector();
             int j = 0;
 
-            while(input->data[i + j] >= 'a' && input->data[i + j] <= 'z')
-            {
-                v_append(keyword, input->data[i + j]);
+            while(input->data[i + j] <= '9' && input->data[i + j] >= '0') {
+                v_append(tmp_str, input->data[i + j]);
+
                 j++;
             }
 
             i += j - 1;
 
-            if(match_keyword(keyword, ADD, sizeof(ADD)))
-            {
-                curr->type = Add;
-            } 
-            if(match_keyword(keyword, SUB, sizeof(SUB)))
-            {
-                curr->type = Sub;
-            }
-            if(match_keyword(keyword, MUL, sizeof(MUL)))
-            {
-                curr->type = Mul;
-            }
-            if(match_keyword(keyword, DIV, sizeof(DIV)))
-            {
-                curr->type = Div;
-            }
-            else
-            {
-                curr->type = Word;
-            }
+            append_token(tokens, Number, tmp_str->data, tmp_str->len);
 
-            curr->str = malloc(keyword->len);
-            curr->len = keyword->len;
-
-            for(int i = 0; i < keyword->len; i++)
-            {
-                curr->str[i] = keyword->data[i];
-            }
-
-            v_destruct(keyword);
+            v_destruct(tmp_str);
         }
-        if(input->data[i] == '\n')
+        if(input->data[i] <= 'z' && input->data[i] >= 'a')
         {
-            printf("done\n\n");
+            vector *tmp_str = init_vector();
 
-            curr->type = End;
-            curr->next_token = NULL;
-            
-            curr->str = malloc(1);
-            curr->len = 1;
+            int j = 0;
 
-            break;
+            while(input->data[i + j] <= 'z' && input->data[i + j] >= 'a') {
+                v_append(tmp_str, input->data[i + j]);
+
+                j++;
+            }
+
+            i += j - 1;
+
+
+            append_token(tokens, Identifier, tmp_str->data, tmp_str->len);
+
+            v_destruct(tmp_str);
         }
-        
-        curr->next_token = malloc(sizeof(struct token));
-        curr = curr->next_token;
+        if(input->data[i] == '\"')
+        {
+            vector *tmp_str = init_vector();
+
+            int j = 0;
+
+            while(input->data[i + j] == '\"') {
+                v_append(tmp_str, input->data[i + j]);
+
+                j++;
+            }
+
+            i += j - 1;
+
+            append_token(tokens, String, tmp_str->data, tmp_str->len);
+
+            v_destruct(tmp_str);
+        }
     }
 
-    return start;
+    return tokens;
 }

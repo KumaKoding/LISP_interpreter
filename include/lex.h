@@ -9,25 +9,20 @@ enum type
     C_paren,
     Space,
     Number,
-    Add,
-    Sub,
-    Mul,
-    Div,
-    Start,
-    End,
-    Word
+    Identifier,
+    String,
+    End
 };
 
-struct token
+struct Token_vec
 {
-    enum type type;
-    char *str;
-    int len;
-
-    struct token *next_token;
+    enum type *toks;
+    vector **strs;
+    
+    int len, max;
 };
 
-struct token* lex(vector *input);
-int destruct_tokens(struct token *head);
+struct Token_vec *lex(vector *input);
+int destruct_tokens(struct Token_vec *tokens);
 
 #endif

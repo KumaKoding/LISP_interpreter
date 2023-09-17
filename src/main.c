@@ -8,8 +8,8 @@
 int main(void)
 {
     vector *v_char = init_vector();
-    struct token *tokens;
-    node *c_AST;
+    struct Token_vec *tokens;
+    // struct Expr *c_AST;
 
     do
     {
@@ -17,58 +17,39 @@ int main(void)
     } while(v_char->data[v_char->len - 1] != '\n');
 
     tokens = lex(v_char);
-    c_AST = parse(tokens);
 
     { // pretty print enum tokens
-        struct token *curr = tokens;
-
-        while(1)
+        for(int i = 0; i < tokens->len; i++)
         {
-            switch (curr->type)
+            switch(tokens->toks[i])
             {
             case O_paren:
-                printf("(");
+                for(int j = 0; j < tokens->strs[i]->data[j]; j++) { printf("%c", tokens->strs[i]->data[j]); }
                 break;
             case C_paren:
-                printf(")");
+                for(int j = 0; j < tokens->strs[i]->data[j]; j++) { printf("%c", tokens->strs[i]->data[j]); }
                 break;
             case Space:
-                printf(" ");
+                for(int j = 0; j < tokens->strs[i]->data[j]; j++) { printf("%c", tokens->strs[i]->data[j]); }
                 break;
             case Number:
-                printf("n");
+                for(int j = 0; j < tokens->strs[i]->data[j]; j++) { printf("%c", tokens->strs[i]->data[j]); }
                 break;
-            case Add:
-                printf("+");
+            case Identifier:
+                for(int j = 0; j < tokens->strs[i]->data[j]; j++) { printf("%c", tokens->strs[i]->data[j]); }
                 break;
-            case Sub:
-                printf("-");
+            case String:
+                for(int j = 0; j < tokens->strs[i]->data[j]; j++) { printf("%c", tokens->strs[i]->data[j]); }
                 break;
-            case Mul:
-                printf("*");
-                break;
-            case Div:
-                printf("/");
-                break;
-            case Start:
-                printf("{");
-                break;
-            case End:
-                printf("}");
-                break;
-            case Unknown:
-                printf("?");
+            default:
                 break;
             }
-
-            if(curr->type == End)
-            {
-                break;
-            }
-
-            curr = curr->next_token;
         }
     }
+
+    printf("\n");
+
+    // c_AST = parse(tokens);
 
     v_destruct(v_char);
     destruct_tokens(tokens);
