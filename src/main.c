@@ -9,7 +9,7 @@ int main(void)
 {
     vector *v_char = init_vector();
     struct Token_vec *tokens;
-    // struct Expr *c_AST;
+    struct Expr *c_AST;
 
     do
     {
@@ -49,7 +49,38 @@ int main(void)
 
     printf("\n");
 
-    // c_AST = parse(tokens);
+    for(int i = 0; i < tokens->len; i++)
+    {
+        switch (tokens->toks[i])
+        {
+        case O_paren:
+            printf("[ ");
+            break;
+        case C_paren:
+            printf("] ");
+            break;
+        case Space:
+            printf("Space ");
+            break;
+        case Number:
+            printf("Number ");
+            break;
+        case Identifier:
+            printf("Identifier ");
+            break;
+        case String:
+            printf("String ");
+            break;
+        
+        default:
+            break;
+        }
+    }
+
+    printf("\n");
+
+    c_AST = parse(tokens);
+    
 
     v_destruct(v_char);
     destruct_tokens(tokens);

@@ -3,7 +3,8 @@
 ## Current Features
 Currently, the only features are:
 1. Input handling
-2. (Rough) Lexing / Tokenization
+2. Lexing / Tokenization
+3. Primitive Parsing
 
 ## Future Features
 In the future, there will be:

@@ -6,7 +6,7 @@ EXE := $(BIN_DIR)/lisp
 SRC := $(wildcard $(SRC_DIR)/*.c)
 OBJ := $(patsubst $(SRC_DIR)/%.c, $(OBJ_DIR)/%.o, $(SRC))
 
-CFLAGS := -Iinclude -Wall
+CFLAGS := -Iinclude -Wall -g
 
 .PHONY: all clean run
 
