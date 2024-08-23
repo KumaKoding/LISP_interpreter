@@ -113,11 +113,11 @@ struct Token_vec *lex(vector *input)
 
             int j = 0;
 
-            do 
+            do
             {
                 v_append(tmp_str, input->data[i + j]);
                 j++;
-            }while(input->data[i + j] != '\"');
+            } while (input->data[i + j] != '\"');
 
             v_append(tmp_str, input->data[i + j]);
             i += j;
@@ -127,6 +127,6 @@ struct Token_vec *lex(vector *input)
             v_destruct(tmp_str);
         }
     }
-    
+
     return tokens;
 }

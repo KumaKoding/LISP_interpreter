@@ -4,6 +4,15 @@
 #include "vector.h"
 #include "lex.h"
 
+enum expression_type
+{
+    Num,
+    Str,
+    Idr,
+    Lst,
+    Nul
+};
+
 struct Expr_list
 {
     struct Expr **list;
@@ -12,10 +21,10 @@ struct Expr_list
 
 struct Expr
 {
-    int curr_type;
+    enum expression_type curr_type;
 
     struct Expr *prev_expr;
-    
+
     union
     {
         int number;
@@ -25,5 +34,6 @@ struct Expr
 };
 
 struct Expr *parse(struct Token_vec *tokens);
+void print_ast(struct Expr *ast);
 
 #endif // PARSE_H

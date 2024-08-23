@@ -18,7 +18,7 @@ struct Token_vec
 {
     enum type *toks;
     vector **strs;
-    
+
     int len, max;
 };
 
