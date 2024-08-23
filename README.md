@@ -4,12 +4,11 @@
 Currently, the only features are:
 1. Input handling
 2. Lexing / Tokenization
-3. Primitive Parsing
+3. Parsing
+4. Primitive Runtime
 
 ## Future Features
 In the future, there will be:
-1. Parsing
-2. Runtime
 3. Garbage Collection
 4. Fully functioning scheme
 
