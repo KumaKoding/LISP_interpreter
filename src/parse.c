@@ -13,11 +13,11 @@ Expr *parse(char *buf, int len)
     {
         if(buf[c] == '(')
         {
-            depth++;
+
         }
         if(buf[c] == ')')
         {
-            depth--;
+            
         }
     }
 }

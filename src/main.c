@@ -4,6 +4,8 @@
 #include <time.h>
 
 #include "types.h"
+#include "lexer.h"
+#include "parse.h"
 
 int fsize(FILE *f)
 {
@@ -24,7 +26,6 @@ Expr *test_num(int n)
 
     return e;
 }
-
 Expr *test_str(char *str)
 {
     Expr *e = malloc(sizeof(Expr));
@@ -36,7 +37,6 @@ Expr *test_str(char *str)
 
     return e;
 }
-
 Expr *test_idr(char *str)
 {
     Expr *e = malloc(sizeof(Expr));
@@ -48,7 +48,6 @@ Expr *test_idr(char *str)
 
     return e;
 }
-
 Expr *test_lam(char *earg[], int nargs, Expr *ins)
 {
     Expr *e = malloc(sizeof(Expr));
@@ -69,7 +68,6 @@ Expr *test_lam(char *earg[], int nargs, Expr *ins)
 
     return e;
 }
-
 Expr *test_nat(char *earg[], int nargs, Expr *ins)
 {
     Expr *e = malloc(sizeof(Expr));
@@ -90,7 +88,6 @@ Expr *test_nat(char *earg[], int nargs, Expr *ins)
 
     return e;
 }
-
 Expr *test_lst(Expr *ins[], int len)
 {
     Expr *e = malloc(sizeof(Expr));
@@ -119,74 +116,21 @@ Expr *test_lst(Expr *ins[], int len)
 
 int main(int argc, const char *argv[])
 {
-    // if(argc != 2)
-    // {
-    //     return 0;
-    // }
+    FILE *f;
+    int size;
 
-    // FILE *input = fopen(argv[1], "r");
-    // int size = fsize(input);
-    // char *buf = malloc(size);
-    // fread(buf, sizeof(char), size, input);
-
-    PairTable *pt = pt_init();
-
-#define LEN 200
-
-    Vector **tests = malloc(sizeof(Vector*) * LEN);
-
-    srand(time(NULL));
-
-    for(int i = 0; i < LEN; i++)
+    if(argc < 2)
     {
-        tests[i] = v_init();
-
-        for(int j = 0; j < 8; j++)
-        {
-            v_append(tests[i], 'a' + (rand() % ('z' - 'a')));
-        }
-
-        pt_insert(pt, tests[i], NULL);
+        return -1;
     }
 
-    Expr *test = 
-        test_lst(
-            (Expr*[]){
-                test_lst(
-                    (Expr*[]){
-                        test_idr("Hello"),
-                        test_num(156),
-                        test_nat(
-                            (char*[]){
-                                "x",
-                                "y",
-                                "z"
-                            }, 3,
-                            test_num(8)
-                        )
-                    }, 3
-                ),
-                test_lam(
-                    (char*[]){
-                        "arg1",
-                        "arg2"
-                    }, 2,
-                    test_lst(
-                        (Expr*[]){
-                            test_idr("x"),
-                            test_num(12931)
-                        }, 2
-                    )
-                )
-            }, 2
-        );
+    f = fopen(argv[1], "r");
+    size = fsize(f);
+    char *buf = malloc(size);
 
-    Expr *copy = e_copy(test, NULL, NULL, 0);
-    e_print(copy);
+    fread(buf, size, size, f);
 
-    e_destruct(test);
-    e_destruct(copy);
-    pt_destruct(pt);
+    struct TokenBuffer *t_buf = lex(buf, size);
 
     return 0;
 }
