@@ -16,4 +16,3 @@ In the future, there will be:
 1. Clone directory
 2. run `make` in terminal
 3. run `./bin/lisp`
-

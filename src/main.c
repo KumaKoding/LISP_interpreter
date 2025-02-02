@@ -126,11 +126,17 @@ int main(int argc, const char *argv[])
 
     f = fopen(argv[1], "r");
     size = fsize(f);
-    char *buf = malloc(size);
 
-    fread(buf, size, size, f);
+    char *buf = malloc(size);
+    fread(buf, sizeof(char), size, f);
 
     struct TokenBuffer *t_buf = lex(buf, size);
+    Expr* expr = parse(buf, size, t_buf);
+
+    e_print(expr);
+
+    delete_tokens(t_buf);
+    free(buf);
 
     return 0;
 }

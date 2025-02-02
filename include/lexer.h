@@ -3,13 +3,14 @@
 
 typedef enum 
 {
-    o_paren,
-    c_paren,
-    string,
-    number,
-    ident,
-    space,
-    end
+    O_Paren,
+    C_Paren,
+    String,
+    Ident,
+    Number,
+    Space,
+    Undef,
+    End
 } Token;
 
 struct TokenBuffer
@@ -20,5 +21,6 @@ struct TokenBuffer
 };
 
 struct TokenBuffer *lex(char *buf, int len);
+void delete_tokens(struct TokenBuffer *buf);
 
-#endif LEXER_H
+#endif

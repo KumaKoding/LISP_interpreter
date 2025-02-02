@@ -45,7 +45,8 @@ struct ExprData
         Idr, // Identifier (def __) or (f (a 10))
         Lam, // Function (lambda)
         Nat,  // (print ...)
-        Lst // (x y z ...)
+        Lst, // (x y z ...)
+        Nil, // nil
     } type;
     union
     {

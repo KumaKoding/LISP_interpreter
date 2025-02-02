@@ -9,7 +9,7 @@ struct ExprQueue
     int len;
 };
 
-Expr *pop(struct ExprQueue *queue)
+Expr *eq_pop(struct ExprQueue *queue)
 {
     if(queue->len <= 0)
     {
@@ -43,8 +43,13 @@ Expr *pop(struct ExprQueue *queue)
 
 }
 
-void append(struct ExprQueue *queue, Expr *expr)
+void eq_append(struct ExprQueue *queue, Expr *expr)
 {
+    if(queue->len >= 256)
+    {
+        printf("ERROR: copy has exceeded maximum depth");
+    }
+
     queue->buf[queue->len] = expr;
     queue->len++;
 }
@@ -58,13 +63,13 @@ Expr *e_copy(Expr *expr, Vector *replace_keys[], Expr *replace_expr[], int n_rep
 
     Expr *copy = malloc(sizeof(Expr));
 
-    append(&orig_queue, expr);
-    append(&copy_queue, copy);
+    eq_append(&orig_queue, expr);
+    eq_append(&copy_queue, copy);
 
     while(copy_queue.len > 0)
     {
-        Expr *curr_orig = pop(&orig_queue);
-        Expr *curr_copy = pop(&copy_queue);
+        Expr *curr_orig = eq_pop(&orig_queue);
+        Expr *curr_copy = eq_pop(&copy_queue);
 
         while(curr_orig != NULL)
         {
@@ -91,8 +96,8 @@ Expr *e_copy(Expr *expr, Vector *replace_keys[], Expr *replace_expr[], int n_rep
                     {
                         found_match = 1;
 
-                        append(&orig_queue, replace_expr[i]);
-                        append(&copy_queue, curr_copy);
+                        eq_append(&orig_queue, replace_expr[i]);
+                        eq_append(&copy_queue, curr_copy);
                     }
                 }
 
@@ -119,8 +124,9 @@ Expr *e_copy(Expr *expr, Vector *replace_keys[], Expr *replace_expr[], int n_rep
 
                 curr_copy->car.data.lam->instructions = malloc(sizeof(Expr));
 
-                append(&orig_queue, curr_orig->car.data.lam->instructions);
-                append(&copy_queue, curr_copy->car.data.lam->instructions);
+                eq_append(&orig_queue, curr_orig->car.data.lam->instructions);
+                eq_append(&copy_queue, curr_copy->car.data.lam->instructions);
+                
                 break;
             case Nat:
                 curr_copy->car.type = Nat;
@@ -136,17 +142,22 @@ Expr *e_copy(Expr *expr, Vector *replace_keys[], Expr *replace_expr[], int n_rep
 
                 curr_copy->car.data.lam->instructions = malloc(sizeof(Expr));
 
-                append(&orig_queue, curr_orig->car.data.lam->instructions);
-                append(&copy_queue, curr_copy->car.data.lam->instructions);
+                eq_append(&orig_queue, curr_orig->car.data.lam->instructions);
+                eq_append(&copy_queue, curr_copy->car.data.lam->instructions);
+
                 break;
             case Lst:
                 curr_copy->car.type = Lst;
                 curr_copy->car.data.lst = malloc(sizeof(Expr));
 
-                append(&orig_queue, curr_orig->car.data.lst);
-                append(&copy_queue, curr_copy->car.data.lst);
+                eq_append(&orig_queue, curr_orig->car.data.lst);
+                eq_append(&copy_queue, curr_copy->car.data.lst);
+
                 break;
-            
+            case Nil:
+                curr_copy->car.type = Nil;
+
+                break;
             default:
                 break;
             }
@@ -174,24 +185,24 @@ void e_destruct(Expr *expr)
     struct ExprQueue trace;
     trace.len = 0;
 
-    append(&trace, expr);
+    eq_append(&trace, expr);
 
     while(trace.len > 0)
     {
-        Expr *curr = pop(&trace);
+        Expr *curr = eq_pop(&trace);
 
         while(curr != NULL)
         {
             switch(curr->car.type)
             {
                 case Lam:
-                    append(&trace, curr->car.data.lam->instructions);
+                    eq_append(&trace, curr->car.data.lam->instructions);
                     break;
                 case Nat:
-                    append(&trace, curr->car.data.lam->instructions);
+                    eq_append(&trace, curr->car.data.lam->instructions);
                     break;
                 case Lst: 
-                    append(&trace, curr->car.data.lst);
+                    eq_append(&trace, curr->car.data.lst);
                     break;
                 default:
                     break;
@@ -257,6 +268,9 @@ void e_print(Expr* expr)
             printf("(");
             e_print(curr->car.data.lst);
             printf(")");
+            break;
+        case Nil:
+            printf("nil");
             break;
         
         default:
