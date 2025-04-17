@@ -1,11 +1,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <time.h>
 
 #include "types.h"
 #include "lexer.h"
 #include "parse.h"
+#include "eval.h"
 
 int fsize(FILE *f)
 {
@@ -68,26 +68,6 @@ Expr *test_lam(char *earg[], int nargs, Expr *ins)
 
     return e;
 }
-Expr *test_nat(char *earg[], int nargs, Expr *ins)
-{
-    Expr *e = malloc(sizeof(Expr));
-
-    e->car.type = Nat;
-    e->car.data.lam = malloc(sizeof(Lambda));
-    e->car.data.lam->n_args = nargs;
-    e->car.data.lam->p_keys = malloc(sizeof(Vector) * nargs);
-    for(int i = 0; i < nargs; i++)
-    {
-        e->car.data.lam->p_keys[i]= v_init();
-        v_append_str(e->car.data.lam->p_keys[i], earg[i], strlen(earg[i]));
-    }
-    
-    e->car.data.lam->instructions = ins;
-
-    e->cdr = NULL;
-
-    return e;
-}
 Expr *test_lst(Expr *ins[], int len)
 {
     Expr *e = malloc(sizeof(Expr));
@@ -133,7 +113,7 @@ int main(int argc, const char *argv[])
     struct TokenBuffer *t_buf = lex(buf, size);
     Expr* expr = parse(buf, size, t_buf);
 
-    e_print(expr);
+    eval(expr);
 
     delete_tokens(t_buf);
     free(buf);

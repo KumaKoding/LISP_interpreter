@@ -1,1 +1,1 @@
-(define f (lambda (x) (print "Hello, World!"))) (f 10) () a
+(define f (lambda (x) (print "Hello, World!"))) (f 10) ()

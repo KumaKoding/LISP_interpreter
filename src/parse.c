@@ -1,6 +1,5 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <math.h>
 
 #include "parse.h"
 
@@ -34,7 +33,7 @@ unsigned int powi(unsigned int a, unsigned int b)
     return acc;
 }
 
-Expr *es_pop(struct ExprStack *es)
+static Expr *es_pop(struct ExprStack *es)
 {
     if(es->len == 0)
     {
@@ -48,7 +47,7 @@ Expr *es_pop(struct ExprStack *es)
     return e;
 }
 
-void es_append(struct ExprStack *es, Expr *expr)
+static void es_append(struct ExprStack *es, Expr *expr)
 {
     if(es->len >= 256)
     {

@@ -10,6 +10,7 @@ typedef struct Pair Pair;
 typedef struct ExprData ExprData;
 typedef struct Expr Expr;
 typedef struct Lambda Lambda;
+typedef struct Native Native;
 
 struct Vector
 {
@@ -43,8 +44,8 @@ struct ExprData
         Num, // Number (1 2 3...)
         Str, // String ("...")
         Idr, // Identifier (def __) or (f (a 10))
-        Lam, // Function (lambda)
-        Nat,  // (print ...)
+        Lam, // Function (lambda) only for storage
+        Nat, // Function w/ name but not instructions
         Lst, // (x y z ...)
         Nil, // nil
     } type;
@@ -53,6 +54,7 @@ struct ExprData
         Vector *str;
         int num;
         Lambda *lam;
+        Native *nat;
 
         Expr *lst;
     } data;
@@ -68,6 +70,13 @@ struct Lambda
 {
     Vector **p_keys;
     Expr *instructions;
+    int n_args;
+};
+
+struct Native
+{
+    Vector *key;
+    Expr *params;
     int n_args;
 };
 
