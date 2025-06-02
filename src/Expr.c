@@ -135,8 +135,11 @@ Expr *e_copy(Expr *expr, Vector *replace_keys[], Expr *replace_expr[], int n_rep
                 curr_copy->car.data.nat->key = v_init();
                 v_copy(curr_copy->car.data.nat->key, curr_orig->car.data.nat->key);
 
-                eq_append(&orig_queue, curr_orig->car.data.nat->params);
-                eq_append(&copy_queue, curr_copy->car.data.nat->params);
+                for(int i = 0; i < curr_orig->car.data.nat->n_args; i++)
+                {
+                    eq_append(&orig_queue, curr_orig->car.data.nat->params[i]);
+                    eq_append(&copy_queue, curr_copy->car.data.nat->params[i]);
+                }
             case Lst:
                 curr_copy->car.type = Lst;
                 curr_copy->car.data.lst = malloc(sizeof(Expr));
@@ -198,7 +201,12 @@ void e_destruct(Expr *expr)
                 break;
             case Nat:
                 v_destruct(curr->car.data.nat->key);
-                eq_append(&trace, curr->car.data.nat->params);
+
+                for(int i = 0; i < curr->car.data.nat->n_args; i++)
+                {
+                    eq_append(&trace, curr->car.data.nat->params[i]);
+                }
+
                 free(curr->car.data.nat);
                 break;
             case Lst:

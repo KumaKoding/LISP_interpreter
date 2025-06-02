@@ -76,7 +76,7 @@ struct Lambda
 struct Native
 {
     Vector *key;
-    Expr *params;
+    Expr **params;
     int n_args;
 };
 

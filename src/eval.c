@@ -4,360 +4,354 @@
 
 #include "eval.h"
 
-struct ExprStack
+typedef struct StackFrame StackFrame;
+
+struct VisitStack
 {
     int len;
+    int max_len;
     Expr *stack[256];
 };
 
-struct ExprQueue
+struct StackFrame
 {
-    Expr *buf[256];
-    int len;
+    Expr *fn;
+
+    Expr **params;
+    int max_params;
+    int occ_params;
+
+    Expr *return_addr;
 };
 
-static Expr *es_pop(struct ExprStack *es)
+struct CallStack
 {
-    if (es->len == 0)
-    {
-        return NULL;
-    }
+    int len;
+    int max_len;
+    StackFrame stack[256];
+};
 
-    Expr *e = es->stack[es->len - 1];
-    es->stack[es->len - 1] = NULL;
-    es->len--;
-
-    return e;
-}
-
-static void es_append(struct ExprStack *es, Expr *expr)
+void vs_push(struct VisitStack visit_stack, Expr *e)
 {
-    if (es->len >= 256)
+    if(visit_stack.len >= visit_stack.max_len)
     {
         printf("ERROR: Evaluator has exceeded maximum depth");
         abort();
     }
 
-    es->stack[es->len] = expr;
-    es->len++;
+    visit_stack.stack[visit_stack.len] = e;
+    visit_stack.len++;
 }
 
-void run_native(Expr *f, Expr *params, struct ExprStack *visit_stack, struct ExprStack *value_stack, PairTable *pt)
+Expr *vs_pop(struct VisitStack visit_stack)
 {
-    Expr *nil = malloc(sizeof(Expr));
-    nil->car.type = Nil;
-    nil->cdr = NULL;
-
-    int n_filled = 0;
-    Expr *fill_ptr = f->car.data.nat->params;
-
-    while (fill_ptr != NULL)
+    if(visit_stack.len <= 0)
     {
-        n_filled++;
-        fill_ptr = fill_ptr->cdr;
+        printf("ERROR: Expected item on stack, unable");
     }
 
-    int n_params = 0;
+    Expr *e = visit_stack.stack[visit_stack.len - 1];
+    visit_stack.stack[visit_stack.len - 1] = NULL;
+    visit_stack.len--;
 
-    Expr *param_ptr = params;
-
-    while (param_ptr != NULL)
-    {
-        n_params++;
-        param_ptr = param_ptr->cdr;
-    }
-
-    // number of arguments already filled, not number of args in params
-
-    if (n_filled + n_params < f->car.data.nat->n_args)
-    {
-        Expr *incomplete_native = malloc(sizeof(Expr));
-        incomplete_native->car.data.nat = malloc(sizeof(Native));
-        incomplete_native->car.type = Nat;
-
-        incomplete_native->car.data.nat->key = v_init();
-        v_copy(incomplete_native->car.data.nat->key, f->car.data.nat->key);
-
-        incomplete_native->car.data.nat->params = e_copy(f->car.data.nat->params, NULL, NULL, 0);
-
-        Expr *incomplete_ptr = incomplete_native->car.data.nat->params;
-
-        for (int i = 0; i < n_filled; i++)
-        {
-            incomplete_ptr = incomplete_ptr->cdr;
-        }
-
-        incomplete_native->car.data.nat->params->cdr = e_copy(incomplete_ptr, NULL, NULL, 0);
-
-        es_append(value_stack, incomplete_native);
-    }
-
-    if (v_match_with_string(f->car.data.nat->key, "define", strlen("define")))
-    {
-        if (params->cdr->car.type == Idr)
-        {
-            pt_insert(pt, params->car.data.str, e_copy(pt_find(pt, params->car.data.str)->instructions, NULL, NULL, 0));
-        }
-        else if (params->cdr->car.type == Lst)
-        {
-            pt_insert(pt, params->car.data.str, e_copy(es_pop(value_stack), NULL, NULL, 0));
-        }
-        else
-        {
-            pt_insert(pt, params->car.data.str, e_copy(params->cdr, NULL, NULL, 0));
-        }
-
-        es_append(value_stack, nil);
-    }
-    if (v_match_with_string(f->car.data.nat->key, "print", strlen("print")))
-    {
-        if (params->car.type == Idr)
-        {
-            e_print(pt_find(pt, params->car.data.str)->instructions);
-            printf("\n");
-        }
-        else if (params->car.type == Lst)
-        {
-            e_print(es_pop(value_stack));
-            printf("\n");
-        }
-        else
-        {
-            e_print(params);
-            printf("\n");
-        }
-
-        es_append(value_stack, nil);
-    }
+    return e;
 }
 
-Expr *create_native(char *name, int name_len, int n_args)
+void cs_push(struct CallStack call_stack, Expr *fn, Expr *params[], int max_params, Expr *return_addr)
 {
-    Expr *new_native = malloc(sizeof(Expr));
-    new_native->car.data.nat = malloc(sizeof(Native));
-    new_native->car.type = Nat;
+    StackFrame frame;
 
-    new_native->car.data.nat->key = v_init();
-    v_append_str(new_native->car.data.nat->key, name, name_len);
+    frame.fn = fn;
+    frame.params = params;
+    frame.max_params = max_params;
+    frame.occ_params = 0;
+    frame.return_addr = return_addr;
 
-    new_native->car.data.nat->n_args = n_args;
-    new_native->car.data.nat->params = NULL;
-
-    return new_native;
-}
-
-void add_natives(PairTable *pt)
-{
-    Expr *define = create_native("define", strlen("define"), 2);
-    Expr *print = create_native("print", strlen("print"), 2);
-
-    pt_insert(pt, define->car.data.nat->key, define);
-    pt_insert(pt, print->car.data.nat->key, print);
-}
-
-int identify_lambda(Expr *e)
-{
-    if (e->car.type == Idr)
+    if(call_stack.len >= call_stack.max_len)
     {
-        if (v_match_with_string(e->car.data.str, "lambda", strlen("lambda")))
-        {
-            if (e->cdr->car.type == Lst && e->cdr->cdr->car.type == Lst)
-            {
-                return 1;
-            }
-        }
+        printf("ERROR: Evaluator has exceeded maximum depth");
+        abort();
     }
 
-    return 0;
+    call_stack.stack[call_stack.len] = frame;
+    call_stack.len++;
 }
 
 Expr *create_lambda(Expr *e)
 {
-    Expr *lambda = malloc(sizeof(Expr));
-    lambda->car.data.lam = malloc(sizeof(Lambda));
-    lambda->car.type = Lam;
+    Expr *new_lambda = malloc(sizeof(struct Expr));
+    new_lambda->car.type = Lam;
+    new_lambda->car.data.lam = malloc(sizeof(Lambda));
 
-    Expr *ptr = e->cdr->car.data.lst;
-    int n_args = 0;
+    Expr *curr_expr = new_lambda->cdr->car.data.lst;
+    int size = 0;
 
-    while (ptr != NULL)
+    while(curr_expr != NULL)
     {
-        ptr = ptr->cdr;
-        n_args++;
+        size++;
+        
+        curr_expr = curr_expr->cdr;
     }
 
-    lambda->car.data.lam->p_keys = malloc(sizeof(Vector) * n_args);
-    lambda->car.data.lam->n_args = n_args;
+    new_lambda->car.data.lam->n_args = size;
+    new_lambda->car.data.lam->p_keys = malloc(sizeof(Vector*) * size);
 
-    ptr = e->cdr->car.data.lst;
+    curr_expr = new_lambda->cdr->car.data.lst;
 
-    for (int i = 0; i < n_args; i++)
+    for(int i = 0; i < size; i++)
     {
-        lambda->car.data.lam->p_keys[i] = v_init();
-        v_copy(lambda->car.data.lam->p_keys[i], ptr->car.data.str);
+        new_lambda->car.data.lam->p_keys[i] = v_init();
+        v_copy(new_lambda->car.data.lam->p_keys[i], curr_expr->car.data.str);
 
-        ptr = ptr->cdr;
+        curr_expr = curr_expr->cdr;
     }
+    
+    new_lambda->car.data.lam->instructions = e_copy(e->cdr->cdr, NULL, NULL, 0);
 
-    lambda->car.data.lam->instructions = e_copy(e->cdr->cdr, NULL, NULL, 0); // will be a list
 
-    return lambda;
 }
 
-void idr_loop(Expr *e, struct ExprStack *visit_stack, struct ExprStack *value_stack, PairTable *pt)
+int identify_lambda(Expr *e)
 {
-    Expr *f = e;
-
-    e_print(f);
-    printf("\n");
-
-    if (f->car.type == Idr)
+    if(e->car.type != Idr)
     {
-        f = pt_find(pt, e->car.data.str)->instructions;
+        return 0;
     }
 
-    if (f->car.type == Num || f->car.type == Str || f->car.type == Nil)
+    if(!vec_cmp_str(e->car.data.str, "lambda", strlen("lambda")))
     {
-        es_append(value_stack, f);
-        return;
+        return 0;
     }
 
-    if (f->car.type == Nat)
+    if(e->cdr->car.type != Lst && !e->cdr->cdr)
     {
-        run_native(f, e->cdr, visit_stack, value_stack, pt);
-        return;
+        return 0;
     }
 
-    Expr *e_curr = e->cdr;
-    int n = 0;
+    return 1;
+}
 
-    Expr **params = malloc(sizeof(Expr) * f->car.data.lam->n_args);
-
-    while (e_curr != NULL)
+int identify_native(Expr *e)
+{
+    if(e->car.type != Idr)
     {
-        if (e_curr->car.type == Idr)
+        return 0;
+    }
+
+    const char* const strings[] = {
+        "print"
+    };
+
+    for(int i = 0; i < sizeof(strings); i++)
+    {
+        if(vec_cmp_str(e->car.data.str, strings[i], strlen(strings[i])))
         {
-            params[n] = pt_find(pt, e_curr->car.data.str)->instructions;
+            return 1;
         }
-        else if (e_curr->car.type == Lst)
+    }
+}
+
+Expr *run_native(StackFrame f_curr)
+{
+    Vector *key = f_curr.fn->car.data.nat->key;
+
+    Expr *return_value = malloc(sizeof(Expr));
+    return_value->car.type = Nil;
+    return_value->cdr = NULL;
+
+    if (v_match_with_string(key, "print", strlen("print")))
+    {
+        e_print(f_curr.params[0]);
+        printf("\n");
+
+        return return_value;
+    }
+}
+
+void run_fn(struct VisitStack visit_stack, struct CallStack call_stack)
+{
+    StackFrame f_curr = call_stack.stack[call_stack.len - 1];
+
+    Expr *return_value = malloc(sizeof(Expr));
+
+    if(f_curr.fn->car.type == Nat)
+    {
+        struct Native *function = f_curr.fn->car.data.nat;
+
+        for(int i = 0; i < return_value->car.data.nat->n_args; i++)
         {
-            params[n] = es_pop(value_stack);
+            return_value->car.data.nat->params[f_curr.occ_params + i] = f_curr.params[i];
+        }
+
+        if(f_curr.occ_params < f_curr.max_params)
+        {
+            return_value->car.type = Nat;
+            return_value->car.data.nat = malloc(sizeof(Native));
+            return_value->car.data.nat->key = v_init();
+            v_copy(return_value->car.data.nat->key, function->key);
+            return_value->car.data.nat->n_args = f_curr.max_params;
         }
         else
         {
-            params[n] = e_curr;
+            return_value = run_native(f_curr);
+        }
+    }
+    else if(f_curr.fn->car.type == Lam)
+    {
+        struct Lambda *function = f_curr.fn->car.data.lam;
+
+        if(f_curr.occ_params > function->n_args)
+        {
+            printf("it's wrong\n");
         }
 
-        e_curr = e_curr->cdr;
-        n++;
+        Expr *new_instructions = e_copy(function->instructions, function->p_keys, f_curr.params, f_curr.occ_params);
+
+        if(f_curr.occ_params < f_curr.max_params)
+        {
+            return_value->car.type = Lam;
+            return_value->car.data.lam = malloc(sizeof(Lambda));
+            return_value->car.data.lam->instructions = new_instructions;
+            return_value->car.data.lam->n_args = f_curr.max_params - f_curr.occ_params;
+            return_value->car.data.lam->p_keys = malloc(sizeof(Vector) * return_value->car.data.lam->n_args);
+
+            for(int i = 0; i < return_value->car.data.lam->n_args; i++)
+            {
+                return_value->car.data.lam->p_keys[i] = v_init();
+                v_copy(return_value->car.data.lam->p_keys[i], function->p_keys[f_curr.occ_params + i]);
+            }
+        }
+        else
+        {
+            return_value = new_instructions;
+        }
     }
 
-    if (n < (f->car.data.lam->n_args - 1))
+    f_curr.return_addr = return_value;
+    e_destruct(f_curr.fn);
+
+    for(int i = 0; i < f_curr.max_params; i++)
     {
-        Expr *incomplete_lam = malloc(sizeof(Expr));
-        incomplete_lam->car.data.lam = malloc(sizeof(Lambda));
-        incomplete_lam->car.type = Lam;
+        e_destruct(f_curr.params[i]);
+    }
 
-        incomplete_lam->car.data.lam->instructions = e_copy(f, f->car.data.lam->p_keys, params, n);
+    free(f_curr.params);
 
-        incomplete_lam->car.data.lam->n_args = f->car.data.lam->n_args - n;
-        incomplete_lam->car.data.lam->p_keys = malloc(incomplete_lam->car.data.lam->n_args);
+    f_curr.fn = NULL;
+    f_curr.params = NULL;
+    f_curr.max_params = 0;
+    f_curr.occ_params = 0;
+    f_curr.return_addr = NULL;
 
-        for (int i = 0; i < incomplete_lam->car.data.lam->n_args; i++)
-        {
-            incomplete_lam->car.data.lam->p_keys[i] = v_init();
-            v_copy(incomplete_lam->car.data.lam->p_keys[i], f->car.data.lam->p_keys[i + n]);
-        }
+    call_stack.len--;
+}
 
-        es_append(value_stack, incomplete_lam);
+void add_fn(Expr *e, struct CallStack call_stack)
+{
+    StackFrame f_curr = call_stack.stack[call_stack.len - 1];
+
+    Expr *fn = NULL;
+    Expr **params = NULL;
+    int max_params = 0;
+    Expr *return_addr = NULL;
+
+    Expr *arg_ptr = e;
+
+    while(arg_ptr != NULL)
+    {
+        max_params++;
+        arg_ptr = arg_ptr->cdr;
+    }
+
+    params = calloc(max_params, sizeof(Expr));
+
+    if(f_curr.fn == NULL)
+    {
+        f_curr.fn = malloc(sizeof(Expr));
+        return_addr = f_curr.fn;
     }
     else
     {
-        es_append(visit_stack, e_copy(f->car.data.lam->instructions, f->car.data.lam->p_keys, params, f->car.data.lam->n_args));
+        f_curr.params[f_curr.occ_params] = malloc(sizeof(Expr));
+        return_addr = f_curr.params[f_curr.occ_params];
     }
+
+    cs_push(call_stack, fn, params, max_params, return_addr);
 }
 
-void list_loop(Expr *e, struct ExprStack *visit_stack, struct ExprStack *value_stack, PairTable *pt)
+void eval_loop(Expr *e, PairTable *pt, struct CallStack call_stack, struct VisitStack visit_stack)
 {
-    Expr *e_curr = e;
 
-    if (e->car.type == Idr)
-    {
-        // check for special forms first
-        if (identify_lambda(e_curr))
-        {
-            es_append(value_stack, create_lambda(e_curr));
+}
 
-            return;
-        }
-        else
-        {
-            es_append(visit_stack, e);
-            e_curr = e->cdr;
-        }
-    }
+void eval_inner(Expr *e, PairTable *pt, struct CallStack call_stack, struct VisitStack visit_stack)
+{
 
-    while (e_curr != NULL)
-    {
-        if (e_curr->car.type == Lst)
-        {
-            es_append(visit_stack, e_curr);
-        }
-
-        e_curr = e_curr->cdr;
-    }
 }
 
 void eval(Expr *e)
 {
-    struct PairTable *pt = pt_init();
-    struct ExprStack visit_stack; // already evaluated items too feed into function
-    struct ExprStack value_stack; // which things to visit
+    PairTable *pt = pt_init();
+    struct CallStack call_stack;
+    struct VisitStack visit_stack;
 
-    add_natives(pt);
+    call_stack.len = 0;
+    call_stack.max_len = 256;
 
     visit_stack.len = 0;
-    value_stack.len = 0;
+    visit_stack.max_len = 256;
 
-    // EVALUATE LAST ITEM IN THE LIST FIRST
+    cs_push(call_stack, e, NULL, 0, NULL);
+    vs_push(visit_stack, e);
 
-    Expr *base_expr = e;
-    int n_base = 0;
+    e_print(e);
 
-    while (base_expr != NULL)
+    while(call_stack.len < 0)
     {
-        es_append(&visit_stack, NULL);
+        Expr *e_curr = vs_pop(visit_stack);
 
-        base_expr = base_expr->cdr;
-        n_base++;
-    }
+        e_print(e_curr);
+        printf("\n");
 
-    base_expr = e;
-
-    for (int i = 0; i < n_base; i++)
-    {
-        visit_stack.stack[n_base - i - 1] = base_expr;
-        base_expr = base_expr->cdr;
-    }
-
-    while (visit_stack.len > 0)
-    {
-        Expr *e_init = es_pop(&visit_stack);
-        Expr *e_curr = e_init;
-
-        if (e_init->car.type != Lst) // if it's lambda, loop, idr, builtin, etc.
-        {                            // builtin functions stored as lam (a b) (define a b)
-            // runs functions, combines all parts of function
-            idr_loop(e_curr, &visit_stack, &value_stack, pt);
-        }
-        else
+        while(e_curr != NULL)
         {
-            // combines special forms (lambda, loop), appends to queue & stack
-            e_curr = e_curr->car.data.lst;
+            if(e_curr->car.type == Idr)
+            {
+                vs_push(visit_stack, e_curr->cdr);
+                e_curr = pt_find(pt, e_curr->car.data.str)->instructions; // NULL if none
+            }
 
-            list_loop(e_curr, &visit_stack, &value_stack, pt);
+            if(e_curr->car.type == Lst)
+            {
+                if(e_curr->cdr)
+                {
+                    vs_push(visit_stack, e_curr->cdr);
+                }
+
+                e_curr = e_curr->car.data.lst;
+
+                eval_inner(e_curr, pt, call_stack, visit_stack);
+                // add_fn(e_curr, call_stack);
+            }
+            else
+            {
+                eval_inner(e_curr, pt, call_stack, visit_stack);
+
+
+
+
+                // StackFrame f_curr = call_stack.stack[call_stack.len - 1];
+
+                // f_curr.params[f_curr.occ_params] = e_copy(e_curr, NULL, NULL, 0);
+                // f_curr.occ_params++;
+
+                e_curr = e_curr->cdr;
+            }
+
+            if(e_curr == NULL)
+            {
+                run_fn(visit_stack, call_stack);
+            }
         }
     }
-
-    // printf("\n");
 }
