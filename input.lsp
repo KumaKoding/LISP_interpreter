@@ -1,1 +1,1 @@
-((lambda (x) (print x)) 10)
+((lambda (x) (add 1 x)) 2)

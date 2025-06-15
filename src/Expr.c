@@ -129,17 +129,26 @@ Expr *e_copy(Expr *expr, Vector *replace_keys[], Expr *replace_expr[], int n_rep
             case Nat:
                 curr_copy->car.type = Nat;
                 curr_copy->car.data.nat = malloc(sizeof(Native));
-                curr_copy->car.data.nat->params = malloc(sizeof(Expr) * curr_orig->car.data.nat->n_args);
                 curr_copy->car.data.nat->n_args = curr_orig->car.data.nat->n_args;
-
+                
                 curr_copy->car.data.nat->key = v_init();
                 v_copy(curr_copy->car.data.nat->key, curr_orig->car.data.nat->key);
-
-                for(int i = 0; i < curr_orig->car.data.nat->n_args; i++)
+                
+                if(curr_orig->car.data.nat->params)
                 {
-                    eq_append(&orig_queue, curr_orig->car.data.nat->params[i]);
-                    eq_append(&copy_queue, curr_copy->car.data.nat->params[i]);
+                    curr_copy->car.data.nat->params = malloc(sizeof(Expr) * curr_orig->car.data.nat->n_args);
+                    
+                    for(int i = 0; i < curr_orig->car.data.nat->n_args; i++)
+                    {
+                        eq_append(&orig_queue, curr_orig->car.data.nat->params[i]);
+                        eq_append(&copy_queue, curr_copy->car.data.nat->params[i]);
+                    }
                 }
+                else
+                {
+                    curr_copy->car.data.nat->params = NULL;
+                }
+                break;
             case Lst:
                 curr_copy->car.type = Lst;
                 curr_copy->car.data.lst = malloc(sizeof(Expr));
@@ -202,12 +211,16 @@ void e_destruct(Expr *expr)
             case Nat:
                 v_destruct(curr->car.data.nat->key);
 
-                for(int i = 0; i < curr->car.data.nat->n_args; i++)
+                if(curr->car.data.nat->params)
                 {
-                    eq_append(&trace, curr->car.data.nat->params[i]);
+                    for(int i = 0; i < curr->car.data.nat->n_args; i++)
+                    {
+                        eq_append(&trace, curr->car.data.nat->params[i]);
+                    }
+    
+                    free(curr->car.data.nat);
                 }
-
-                free(curr->car.data.nat);
+                
                 break;
             case Lst:
                 eq_append(&trace, curr->car.data.lst);
