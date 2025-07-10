@@ -1,0 +1,800 @@
+#include <stddef.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#include "eval.h"
+#include "types.h"
+
+struct VisitStack
+{
+	int len;
+	int max_len;
+	Expr *stack[MAX_EXPR_STACK_SIZE];
+};
+
+struct StackFrame
+{
+	Expr *fn;
+
+	Expr **params;
+	int param_slots;
+	int param_occed;
+};
+
+struct CallStack
+{
+	int len;
+	int max_len;
+	struct StackFrame stack[MAX_CALL_STACK_SIZE];
+};
+
+void vs_push(Expr *e, struct VisitStack *vs);
+Expr *vs_pop(struct VisitStack *vs);
+void add_fn(Expr *e, struct CallStack *cs);
+int count_expr_lst(Expr *e);
+void init_eval(Expr *root, struct CallStack *cs, struct VisitStack *vs);
+Expr *run_native(Native f);
+Expr *create_native(char *key, int n_args);
+void init_natives(PairTable *pt);
+void handle_return(struct CallStack *cs, struct VisitStack *vs, Expr *return_value);
+void handle_native(struct CallStack *cs, struct VisitStack *vs, Native *function);
+void handle_lambda(struct CallStack *cs, struct VisitStack *vs, Lambda *function);
+void run_fn(struct CallStack *cs, struct VisitStack *vs);
+void add_expr_to_fn(Expr *e, struct CallStack *cs);
+Expr *create_lambda(Expr *e);
+int identify_lambda(Expr *e);
+Expr *eval_idr(Expr *e, struct CallStack *cs, struct VisitStack *vs, PairTable *pt);
+Expr *eval_lst(Expr *e, struct CallStack *cs, struct VisitStack *vs, PairTable *pt);
+void print_cs(struct CallStack cs);
+void eval(Expr *e);
+
+void vs_push(Expr *e, struct VisitStack *vs)
+{
+	if(vs->len >= vs->max_len)
+	{
+		printf("ERROR: VisitStack overflow. Aborting");
+		abort();
+	}
+
+	vs->stack[vs->len] = e;
+	vs->len++;
+}
+
+Expr *vs_pop(struct VisitStack *vs)
+{
+	if(vs->len <= 0)
+	{
+		printf("ERROR: VisitStack underflow. Aborting.");
+		abort();
+	}
+
+	Expr *return_e = vs->stack[vs->len - 1];
+	vs->stack[vs->len - 1] = NULL;
+	vs->len--;
+
+	return return_e;
+}
+
+void add_fn(Expr *e, struct CallStack *cs)
+{
+	if(cs->len >= cs->max_len)
+	{
+		printf("ERROR: CallStack overflow. Aborting.");
+		abort();
+	}
+
+	if(!e)
+	{
+		printf("ERROR: Failed to push function. Expected expression where there is none. Aboring.");
+		abort();
+	}
+
+	struct StackFrame frame;
+
+	frame.fn = NULL;
+	frame.param_occed = 0;
+	frame.param_slots = 0;
+
+	Expr *curr_param = e->cdr;
+
+	while(curr_param != NULL)
+	{
+		frame.param_slots++;
+
+		curr_param = curr_param->cdr;
+	}
+
+	frame.params = malloc(sizeof(Expr *) * frame.param_slots);
+
+	cs->stack[cs->len] = frame;
+	cs->len++;
+}
+
+int count_expr_lst(Expr *e)
+{
+	int n = 0;
+	Expr *e_curr = e;
+
+	while(e_curr != NULL)
+	{
+		n++;
+
+		e_curr = e_curr->cdr;
+	}
+
+	return n;
+}
+
+void init_eval(Expr *root, struct CallStack *cs, struct VisitStack *vs)
+{
+	if(!root)
+	{
+		printf("WARNING: Nothing to evaluate, no initialization required\n");
+
+		return;
+	}
+
+	int n_root_exprs = count_expr_lst(root);
+	Expr *curr_root = root;
+
+	for(int i = n_root_exprs - 1; i >= 0; i--)
+	{
+		if(curr_root->car.type != Lst)
+		{
+			printf("ERROR: Invalid root-level function, must be a list. Aborting.");
+			abort();
+		}
+
+		vs->stack[i] = curr_root->car.data.lst;
+		add_fn(curr_root->car.data.lst, cs);
+
+		curr_root = curr_root->cdr;
+	}
+
+	vs->len = n_root_exprs;
+}
+
+Expr *run_native(Native f)
+{
+	Expr *return_value = malloc(sizeof(Expr));
+	return_value->car.type = Nil;
+	return_value->cdr = NULL;
+
+	if(v_match_with_string(f.key, "print", strlen("print")))
+	{
+		if(f.n_filled != 1)
+		{
+			printf("ERROR: Insufficient arguments for __print__. Aborting.");
+			abort();
+		}
+
+		e_print(f.params[0]);
+		printf("\n");
+	}
+	else if(v_match_with_string(f.key, "add", strlen("add")))
+	{
+		if(f.n_filled != 2)
+		{
+			printf("ERROR: Insufficient arguments for __print__. Aborting.");
+			abort();
+		}
+
+		return_value->car.type = Num;
+		return_value->car.data.num = f.params[0]->car.data.num + f.params[1]->car.data.num;
+	}
+	else if(v_match_with_string(f.key, "sub", strlen("sub")))
+	{
+		if(f.n_filled != 2)
+		{
+			printf("ERROR: Insufficient arguments for __print__. Aborting.");
+			abort();
+		}
+
+		return_value->car.type = Num;
+		return_value->car.data.num = f.params[0]->car.data.num - f.params[1]->car.data.num;
+	}
+	else if(v_match_with_string(f.key, "eq", strlen("eq")))
+	{
+		if(f.n_filled != 2)
+		{
+			printf("ERROR: Insufficient arguments for __eq__. Aborting.");
+			abort();
+		}
+
+		return_value->car.type = Num;
+
+		if(f.params[0]->car.data.num == f.params[1]->car.data.num)
+		{
+			return_value->car.data.num = 1;
+		}
+		else 
+		{
+			return_value->car.data.num = 0;
+		}
+	}
+
+	return return_value;
+}
+
+Expr *create_native(char *key, int n_args)
+{
+	Expr *new_native = malloc(sizeof(Expr));
+	new_native->car.type = Nat;
+	new_native->car.data.nat = malloc(sizeof(Native));
+
+	new_native->car.data.nat->key = v_init();
+	v_append_str(new_native->car.data.nat->key, key, strlen(key));
+	
+	new_native->car.data.nat->n_filled = 0;
+	new_native->car.data.nat->n_args = n_args;
+	new_native->car.data.nat->params = malloc(sizeof(Expr *) * n_args);
+
+	return new_native;
+}
+
+void init_natives(PairTable *pt)
+{
+	Expr *print = create_native("print", 1);
+	Expr *add = create_native("add", 2);
+	Expr *sub = create_native("sub", 2);
+	Expr *eq = create_native("eq", 2);
+
+	pt_insert(pt, print->car.data.nat->key, print);
+	pt_insert(pt, add->car.data.nat->key, add);
+	pt_insert(pt, sub->car.data.nat->key, sub);
+	pt_insert(pt, eq->car.data.nat->key, eq);
+}
+
+void handle_return(struct CallStack *cs, struct VisitStack *vs, Expr *return_value)
+{
+	struct StackFrame f_curr = cs->stack[cs->len - 1];
+
+	f_curr.param_occed = 0;
+	f_curr.param_slots = 0;
+	f_curr.fn = NULL;
+	free(f_curr.params);
+
+	// if it is a list, then you can add a function, because it will always be a list or  a single expression---expressions not in lists shouldn't have a cdr
+
+	cs->len--;
+
+	// add_fn(return_value, cs); // probably need to change
+	vs_push(return_value, vs);
+}
+
+void handle_native(struct CallStack *cs, struct VisitStack *vs, Native *function)
+{
+	struct StackFrame f_curr = cs->stack[cs->len - 1];
+	Expr *return_value = NULL;
+
+	for(int i = 0; i < f_curr.param_occed; i++)
+	{
+		function->params[function->n_filled] = f_curr.params[i];
+		function->n_filled++;
+	}
+
+	if(function->n_filled == function->n_args)
+	{
+		return_value = run_native(*function);
+	}
+	else 
+	{
+		return_value = f_curr.fn;
+	}
+
+	handle_return(cs, vs, return_value);
+}
+
+void handle_lambda(struct CallStack *cs, struct VisitStack *vs, Lambda *function)
+{
+	struct StackFrame f_curr = cs->stack[cs->len - 1];
+	Expr *return_value = NULL;
+
+	if(function->n_args == f_curr.param_occed)
+	{
+		return_value = new_copy(function->instructions, REPLACE(function->p_keys, f_curr.params, function->n_args), EXCLUDE_CDR);
+	}
+	else 
+	{
+		return_value = malloc(sizeof(Expr));
+		return_value->car.type = Lam;
+		return_value->car.data.lam = malloc(sizeof(Lambda));
+		return_value->car.data.lam->n_args = function->n_args - f_curr.param_occed;
+
+		return_value->car.data.lam->instructions = new_copy(function->instructions, REPLACE(function->p_keys, f_curr.params, f_curr.param_occed), EXCLUDE_CDR);
+
+		return_value->car.data.lam->p_keys = malloc(sizeof(Vector) * (function->n_args - f_curr.param_occed));
+
+		for(int i = 0; i < (function->n_args - f_curr.param_occed); i++)
+		{
+			return_value->car.data.lam->p_keys[i] = v_init();
+			v_copy(return_value->car.data.lam->p_keys[i], f_curr.fn->car.data.lam->p_keys[f_curr.param_occed + i]);
+		}
+	}
+
+	handle_return(cs, vs, return_value);
+}
+
+void handle_ifelse(struct CallStack *cs, struct VisitStack *vs, IfElse *function)
+{
+	struct StackFrame f_curr = cs->stack[cs->len - 1];
+	Expr *return_value = NULL;
+
+	if(f_curr.param_occed != f_curr.param_slots)
+	{
+		printf("ERROR: Incorrect amount of arguments for if expression. Aborting.");
+		abort();
+	}
+	else 
+	{
+		function->conditional = f_curr.params[0];
+
+		if(function->conditional->car.type == Nil)
+		{
+			return_value = new_copy(function->branch_false, NO_REPLACE, EXCLUDE_CDR);
+		}
+		else if(function->conditional->car.type == Num && function->conditional->car.data.num <= 0)
+		{
+			return_value = new_copy(function->branch_false, NO_REPLACE, EXCLUDE_CDR);
+		}
+		else 
+		{
+			return_value = new_copy(function->branch_true, NO_REPLACE, EXCLUDE_CDR);
+		}
+	}
+
+	handle_return(cs, vs, return_value);
+}
+
+void run_fn(struct CallStack *cs, struct VisitStack *vs)
+{
+	struct StackFrame *f_curr = &cs->stack[cs->len - 1];
+
+	// printf("RUNNING: fn, %d\n\n", f_curr->param_occed);
+
+	if(f_curr->fn->car.type == Lam)
+	{
+		handle_lambda(cs, vs, f_curr->fn->car.data.lam);
+	}
+	else if(f_curr->fn->car.type == Nat)
+	{
+		handle_native(cs, vs, f_curr->fn->car.data.nat);
+	}
+	else if(f_curr->fn->car.type == IfE)
+	{
+		handle_ifelse(cs, vs, f_curr->fn->car.data.ifE);
+	}
+	else 
+	{
+		printf("ERROR: Invalid function type. Aborting.");
+		abort();
+	}
+}
+
+void add_expr_to_fn(Expr *e, struct CallStack *cs)
+{
+	if(cs->len == 0)
+	{
+		return; // Not an exception, because of root function return values.
+	}
+
+	if(!e)
+	{
+		printf("WARNING: NULL expression added to frame.");
+	}
+
+	struct StackFrame *f_curr = &cs->stack[cs->len - 1];
+
+	if(!f_curr->fn)
+	{
+		// f_curr->fn = new_copy(e, NO_REPLACE, EXCLUDE_CDR);
+		f_curr->fn = e;
+	}
+	else 
+	{
+		if(f_curr->param_occed >= f_curr->param_slots)
+		{
+			printf("ERROR: Too many parameters applied. Aborting.");
+			abort();
+		}
+
+		// f_curr->params[f_curr->param_occed] = new_copy(e, NO_REPLACE, EXCLUDE_CDR);
+		f_curr->params[f_curr->param_occed] = e;
+		f_curr->param_occed++;
+	}
+}
+
+Expr *create_lambda(Expr *e)
+{
+	Expr *new_lambda = malloc(sizeof(Expr));
+	new_lambda->car.type = Lam;
+	new_lambda->car.data.lam = malloc(sizeof(Lambda));
+
+	Expr *inner = e->car.data.lst;
+
+	int size = 0;
+
+	Expr *e_curr = inner->cdr->car.data.lst;
+
+	while(e_curr != NULL)
+	{
+		size++;
+		e_curr = e_curr->cdr;
+	}
+
+	new_lambda->car.data.lam->n_args = size;
+	new_lambda->car.data.lam->p_keys = malloc(sizeof(Vector*) * size);
+
+	e_curr = inner->cdr->car.data.lst;
+
+	for(int i = 0; i < size; i++)
+	{
+		new_lambda->car.data.lam->p_keys[i] = v_init();
+		v_copy(new_lambda->car.data.lam->p_keys[i], e_curr->car.data.str);
+
+		e_curr = e_curr->cdr;
+	}
+
+	new_lambda->car.data.lam->instructions = new_copy(inner->cdr->cdr, NO_REPLACE, EXCLUDE_CDR);
+
+	return new_lambda;
+}
+
+int identify_lambda(Expr *e)
+{
+	if(!e->car.data.lst)
+	{
+		return 0;
+	}
+
+	Expr *inner = e->car.data.lst;
+
+	if(inner->car.type != Idr)
+	{
+		return 0;
+	}
+
+	if(!vec_cmp_str(inner->car.data.str, "lambda", strlen("lambda")))
+	{
+		return 0;
+	}
+
+	if(!inner->cdr)
+	{
+		printf("ERROR: Incomplete lambda expression. Aborting.");
+		abort();
+	}
+
+	if(inner->cdr->car.type != Lst || !inner->cdr->cdr)
+	{
+		printf("ERROR: Incomplete lambda expression. Aborting.");
+		abort();
+	}
+
+	return 1;
+}
+
+int identify_ifelse(Expr *e)
+{
+	if(!e->car.data.lst)
+	{
+		return 0;
+	}
+
+	Expr *inner = e->car.data.lst;
+
+	if(inner->car.type != Idr)
+	{
+		return 0;
+	}
+
+	if(!vec_cmp_str(inner->car.data.str, "if", strlen("if")))
+	{
+		return 0;
+	}
+
+	if(!inner->cdr)
+	{
+		printf("ERROR: Incomplete if expression. Aborting.");
+		abort();
+	}
+
+	if(!inner->cdr->cdr)
+	{
+		printf("ERROR: Incomplete if expression. Aborting.");
+		abort();
+	}
+
+	if(!inner->cdr->cdr->cdr)
+	{
+		printf("ERROR: Incomplete if expression. Aborting.");
+		abort();
+	}
+
+	return 1;
+}
+
+Expr *create_ifelse(Expr *e)
+{
+	Expr *new_ifelse = malloc(sizeof(Expr));
+	new_ifelse->car.type = IfE;
+	new_ifelse->car.data.ifE = malloc(sizeof(IfElse));
+
+	new_ifelse->cdr = new_copy(e->car.data.lst->cdr, NO_REPLACE, EXCLUDE_CDR);
+	new_ifelse->car.data.ifE->conditional = NULL;
+	new_ifelse->car.data.ifE->branch_true = new_copy(e->car.data.lst->cdr->cdr, NO_REPLACE, EXCLUDE_CDR);
+	new_ifelse->car.data.ifE->branch_false = new_copy(e->car.data.lst->cdr->cdr->cdr, NO_REPLACE, EXCLUDE_CDR);
+
+	return new_ifelse;
+
+	// when identified, create new ifelse, copy conditional as cdr
+	// vs_push the new thing, and also create new fn
+	// it is true that when you want to fundamentally modify the shape of a thing, you need to copy it
+	// i.e. you can't just make it a ifelse (...) without a copy
+	// this will probably be the same as apply and list
+}
+
+void define(Expr *e, PairTable *pt)
+{
+	Expr *inner = e->car.data.lst;
+	if(pt_find(pt, inner->cdr->car.data.str))
+	{
+		pt_delete(pt, inner->cdr->car.data.str);
+	}
+
+	pt_insert(pt, inner->cdr->car.data.str, inner->cdr->cdr);
+}
+
+int identify_define(Expr *e)
+{
+	if(!e->car.data.lst)
+	{
+		return 0;
+	}
+
+	Expr *inner = e->car.data.lst;
+
+	if(inner->car.type != Idr)
+	{
+		return 0;
+	}
+
+	if(!vec_cmp_str(inner->car.data.str, "define", strlen("define")))
+	{
+		return 0;
+	}
+
+	if(!inner->cdr)
+	{
+		printf("ERROR: Incomplete define. Aborting.");
+		abort();
+	}
+
+	if(inner->cdr->car.type != Idr || !inner->cdr->cdr)
+	{
+		printf("ERROR: Incomplete define. Aborting.");
+		abort();
+	}
+
+	return 1;
+}
+
+Expr *eval_idr(Expr *e, struct CallStack *cs, struct VisitStack *vs, PairTable *pt)
+{
+	Expr *e_curr = e;
+
+	Pair *search = pt_find(pt, e_curr->car.data.str);
+
+	if(!search)
+	{
+		printf("ERROR: Unknown identifier. Aborting.\n");
+		abort();
+	}
+
+	if(e_curr->cdr)
+	{
+		vs_push(e_curr->cdr, vs);
+	}
+
+	e_curr = new_copy(search->instructions, NO_REPLACE, EXCLUDE_CDR);
+
+	return e_curr;
+}
+
+Expr *eval_lst(Expr *e, struct CallStack *cs, struct VisitStack *vs, PairTable *pt)
+{
+	if(!e->car.data.lst)
+	{
+		Expr *nil = malloc(sizeof(Expr));
+		nil->car.type = Nil;
+		nil->cdr = NULL;
+
+		add_expr_to_fn(nil, cs);
+
+		return e->cdr;
+	}
+	else if(identify_lambda(e))
+	{
+		add_expr_to_fn(create_lambda(e), cs);
+
+		return e->cdr;
+	}
+	else if(identify_ifelse(e))
+	{
+		Expr *ifelse = create_ifelse(e);
+
+		if(e->cdr)
+		{
+			vs_push(e->cdr, vs);
+		}
+
+		add_fn(ifelse, cs);
+
+		return ifelse;
+	}
+	else if(identify_define(e))
+	{
+		Expr *inner = e->car.data.lst;
+
+		if(pt_find(pt, inner->cdr->car.data.str))
+		{
+			pt_delete(pt, inner->cdr->car.data.str);
+		}
+
+		pt_insert(pt, inner->cdr->car.data.str, inner->cdr->cdr);
+
+		return e->cdr;
+	}
+	else if(/*identify_list(e)*/ 0)
+	{
+		// add_fn(e, cs);
+		// add_expr_to_fn(create_list(e), cs);
+	}
+	else
+	{
+		if(e->cdr)
+		{
+			vs_push(e->cdr, vs); 
+		}
+
+		add_fn(e->car.data.lst, cs);
+
+		return e->car.data.lst;
+	}
+}
+
+void print_cs(struct CallStack cs)
+{
+	printf("CallStack:\n");
+
+	for(int i = cs.len - 1; i >= 0; i--)
+	{
+		printf("%d\tfn: ", i);
+		if(cs.stack[i].fn == NULL)
+		{
+			printf("NULL");
+		}
+		else 
+		{	
+			e_print(cs.stack[i].fn);
+		}
+		printf("\t%d / %d params:", cs.stack[i].param_occed, cs.stack[i].param_slots);
+
+		for(int p = 0; p < cs.stack[i].param_occed; p++)
+		{
+			e_print(cs.stack[i].params[p]);
+			printf(" ");
+		}
+		printf("\n");
+	}
+
+	if(cs.len == 0)
+	{
+		printf("N/A\n");
+	}
+
+	printf("|--------------------------------------------------------|\n");
+}
+
+void print_vs(struct VisitStack vs)
+{
+	printf("VisitStack:\n");
+	for(int i = vs.len - 1; i >= 0 ; i--)
+	{
+		printf("%d\t", i);
+
+		if(vs.stack[i] == NULL)
+		{
+			printf("NULL\n");
+		}
+		else
+		{
+			e_print(vs.stack[i]);
+			printf("\n");
+		}
+	}
+
+	if(vs.len == 0)
+	{
+		printf("N/A\n");
+	}
+
+	printf("|--------------------------------------------------------|\n\n");
+}
+
+#define DEBUG 1
+
+void eval(Expr *e)
+{
+	PairTable *pt = pt_init();
+	struct CallStack cs;
+	struct VisitStack vs;
+
+	cs.len = 0;
+	cs.max_len = MAX_CALL_STACK_SIZE;
+
+	vs.len = 0;
+	vs.max_len = MAX_EXPR_STACK_SIZE;
+
+	init_natives(pt);
+	// init_eval(e, &cs, &vs);
+	vs_push(e, &vs);
+
+	while(cs.len > 0 || vs.len > 0)
+	{
+		// all that is needed is a rewrite
+		// evaluate functions when param_slots == param_occed
+		// don't add null shit to the stack
+		// use n_args == n_filled or n_args == param_occed for when to fully evaluate
+		// make consistent, robust
+		// move VisitStack and CallStack to another file because they take up 5000 lines
+	
+		Expr *e_curr = NULL;
+
+		if(vs.len > 0)
+		{
+			e_curr = vs_pop(&vs);
+		}
+
+
+#if DEBUG
+		printf("ECurr: ");
+		e_print(e_curr);
+		printf("\n|--------------------------------------------------------|\n");
+		print_cs(cs);
+		print_vs(vs);
+#endif
+
+		while(e_curr != NULL)
+		{
+			if(e_curr->car.type == Idr)
+			{
+				e_curr = eval_idr(e_curr, &cs, &vs, pt);
+			}
+			else if(e_curr->car.type == Lst)
+			{
+				e_curr = eval_lst(e_curr, &cs, &vs, pt);
+			}
+			else 
+			{
+				add_expr_to_fn(e_curr, &cs);
+				e_curr = e_curr->cdr;
+			}
+
+#if DEBUG
+			printf("ECurr: ");
+			e_print(e_curr);
+			printf("\n|--------------------------------------------------------|\n");
+			print_cs(cs);
+			print_vs(vs);
+#endif
+		}
+
+		if(cs.stack[cs.len - 1].param_slots == cs.stack[cs.len - 1].param_occed)
+		{
+			run_fn(&cs, &vs);
+		}
+	}
+}
+

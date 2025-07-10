@@ -6,7 +6,7 @@
 PairTable *pt_init()
 {
     PairTable *pt = malloc(sizeof(PairTable));
-
+    
     pt->max = PTABLE_INIT_SIZE;
     pt->len = 0;
 
@@ -171,7 +171,8 @@ void pt_delete(PairTable *pt, Vector *key)
             prev->next_item = head->next_item;
         
             v_destruct(head->key);
-            e_destruct(head->instructions); 
+            // e_destruct(head->instructions, INCLUDE_CDR); 
+			new_destruct(head->instructions, INCLUDE_CDR);
             free(head);
         }
         else if(head_n_next == 0)
@@ -179,7 +180,8 @@ void pt_delete(PairTable *pt, Vector *key)
             pt->pairs[pt_hash(key, pt->max)] = NULL;
             
             v_destruct(head->key);
-            e_destruct(head->instructions); 
+            // e_destruct(head->instructions, INCLUDE_CDR); 
+			new_destruct(head->instructions, INCLUDE_CDR);
             free(head);
 
         }
@@ -188,7 +190,8 @@ void pt_delete(PairTable *pt, Vector *key)
             pt->pairs[pt_hash(key, pt->max)] = head->next_item;
 
             v_destruct(head->key);
-            e_destruct(head->instructions);
+            // e_destruct(head->instructions, INCLUDE_CDR);
+			new_destruct(head->instructions, INCLUDE_CDR);
             free(head);
         }
 
@@ -210,7 +213,8 @@ void pt_destruct(PairTable *pt)
                 curr = curr->next_item;
 
                 v_destruct(prev->key);
-                e_destruct(prev->instructions);
+                // e_destruct(prev->instructions, INCLUDE_CDR);
+				new_destruct(prev->instructions, INCLUDE_CDR);
                 free(prev);
             }
         }

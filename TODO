@@ -1,3 +1,7 @@
-1. Cleanse tokens
-2. Runtime
-3. Garbage collector
+1. Make 'define' structure (only a top-level function)
+2. Make 'let' expression
+2. Make 'if' expression
+3. Make 'prog' structure'
+4. Debug runtime
+5. Garbage collector
+6. Remake lexer / parser

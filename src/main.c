@@ -100,7 +100,7 @@ int main(int argc, const char *argv[])
     int size;
 
     if(argc < 2)
-    {
+	{
         return -1;
     }
 
@@ -111,12 +111,19 @@ int main(int argc, const char *argv[])
     fread(buf, sizeof(char), size, f);
 
     struct TokenBuffer *t_buf = lex(buf, size);
-    Expr* expr = parse(buf, size, t_buf);
+	Expr *expr = parse(buf, size, t_buf);
 
-    eval(expr);
+	e_print(expr);
+	printf("\n");
 
+	Expr *output = eval(expr);
+
+	e_print(output);
+	printf("\n");
+
+	free(buf);
     delete_tokens(t_buf);
-    free(buf);
+	new_destruct(expr, INCLUDE_CDR);
 
     return 0;
 }

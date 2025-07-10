@@ -1,0 +1,107 @@
+[
+ {
+  "directory": "/Users/alextsukada/Documents/dev/CLang/LISP_interpreter",
+  "arguments": [
+   "cc",
+   "-c",
+   "src/eval.c",
+   "-o",
+   "obj/eval.o",
+   "-Iinclude",
+   "-Wall",
+   "-g",
+   "-fsanitize=undefined"
+  ],
+  "file": "src/eval.c"
+ },
+ {
+  "directory": "/Users/alextsukada/Documents/dev/CLang/LISP_interpreter",
+  "arguments": [
+   "cc",
+   "-c",
+   "src/expr.c",
+   "-o",
+   "obj/expr.o",
+   "-Iinclude",
+   "-Wall",
+   "-g",
+   "-fsanitize=undefined"
+  ],
+  "file": "src/expr.c"
+ },
+ {
+  "directory": "/Users/alextsukada/Documents/dev/CLang/LISP_interpreter",
+  "arguments": [
+   "cc",
+   "-c",
+   "src/lexer.c",
+   "-o",
+   "obj/lexer.o",
+   "-Iinclude",
+   "-Wall",
+   "-g",
+   "-fsanitize=undefined"
+  ],
+  "file": "src/lexer.c"
+ },
+ {
+  "directory": "/Users/alextsukada/Documents/dev/CLang/LISP_interpreter",
+  "arguments": [
+   "cc",
+   "-c",
+   "src/main.c",
+   "-o",
+   "obj/main.o",
+   "-Iinclude",
+   "-Wall",
+   "-g",
+   "-fsanitize=undefined"
+  ],
+  "file": "src/main.c"
+ },
+ {
+  "directory": "/Users/alextsukada/Documents/dev/CLang/LISP_interpreter",
+  "arguments": [
+   "cc",
+   "-c",
+   "src/parse.c",
+   "-o",
+   "obj/parse.o",
+   "-Iinclude",
+   "-Wall",
+   "-g",
+   "-fsanitize=undefined"
+  ],
+  "file": "src/parse.c"
+ },
+ {
+  "directory": "/Users/alextsukada/Documents/dev/CLang/LISP_interpreter",
+  "arguments": [
+   "cc",
+   "-c",
+   "src/table.c",
+   "-o",
+   "obj/table.o",
+   "-Iinclude",
+   "-Wall",
+   "-g",
+   "-fsanitize=undefined"
+  ],
+  "file": "src/table.c"
+ },
+ {
+  "directory": "/Users/alextsukada/Documents/dev/CLang/LISP_interpreter",
+  "arguments": [
+   "cc",
+   "-c",
+   "src/vector.c",
+   "-o",
+   "obj/vector.o",
+   "-Iinclude",
+   "-Wall",
+   "-g",
+   "-fsanitize=undefined"
+  ],
+  "file": "src/vector.c"
+ }
+]

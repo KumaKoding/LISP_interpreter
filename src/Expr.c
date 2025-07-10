@@ -1,3 +1,4 @@
+#include <complex.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -8,6 +9,39 @@ struct ExprQueue
     Expr *buf[256];
     int len;
 };
+
+struct ExprStack
+{
+    int len;
+    int max_len;
+    Expr *stack[MAX_EXPR_STACK_SIZE];
+};
+
+void es_push(struct ExprStack *es, Expr *e)
+{
+    if(es->len >= es->max_len)
+    {
+        printf("ERROR: Evaluator has exceeded maximum depth");
+        abort();
+    }
+
+    es->stack[es->len] = e;
+    es->len++;
+}
+
+Expr *es_pop(struct ExprStack *es)
+{
+    if(es->len <= 0)
+    {
+        printf("ERROR: Expected item on stack, unable");
+    }
+
+    Expr *e = es->stack[es->len - 1];
+    es->stack[es->len - 1] = NULL;
+    es->len--;
+
+    return e;
+}
 
 Expr *eq_pop(struct ExprQueue *queue)
 {
@@ -53,188 +87,311 @@ void eq_append(struct ExprQueue *queue, Expr *expr)
     queue->len++;
 }
 
-Expr *e_copy(Expr *expr, Vector *replace_keys[], Expr *replace_expr[], int n_replace)
+struct stackPairs
 {
-    struct ExprQueue copy_queue;
-    struct ExprQueue orig_queue;
-    copy_queue.len = 0;
-    orig_queue.len = 0;
+	struct ExprStack orig;
+	struct ExprStack copy;
+};
 
-    Expr *copy = malloc(sizeof(Expr));
+void copy_idr(Expr *orig, Expr *copy, struct stackPairs *stacks, struct replacements replacements) 
+{
+	int found_match = 0;
 
-    eq_append(&orig_queue, expr);
-    eq_append(&copy_queue, copy);
+	for(int i = 0; i < replacements.n_replace; i++)
+	{
+		if(vec_cmp_vec(orig->car.data.str, copy->car.data.str))
+		{
+			found_match = 1;
 
-    while (copy_queue.len > 0)
-    {
-        Expr *curr_orig = eq_pop(&orig_queue);
-        Expr *curr_copy = eq_pop(&copy_queue);
+			es_push(&stacks->orig, replacements.replace_exprs[i]);
+			es_push(&stacks->copy, copy);
+		}
+	}
 
-        while (curr_orig != NULL)
-        {
-            switch (curr_orig->car.type)
-            {
-            case Num:
-                curr_copy->car.type = Num;
-                curr_copy->car.data.num = curr_orig->car.data.num;
+	if(!found_match)
+	{
+		copy->car.type = Idr;
+		copy->car.data.str = v_init();
 
-                break;
-            case Str:
-                curr_copy->car.type = Str;
-                curr_copy->car.data.str = v_init();
-                v_copy(curr_copy->car.data.str, curr_orig->car.data.str);
-
-                break;
-            case Idr:
-            {
-                int found_match = 0;
-
-                for (int i = 0; i < n_replace; i++)
-                {
-                    if (vec_cmp_vec(curr_orig->car.data.str, replace_keys[i]))
-                    {
-                        found_match = 1;
-
-                        eq_append(&orig_queue, replace_expr[i]);
-                        eq_append(&copy_queue, curr_copy);
-                    }
-                }
-
-                if (!found_match)
-                {
-                    curr_copy->car.type = Idr;
-                    curr_copy->car.data.str = v_init();
-                    v_copy(curr_copy->car.data.str, curr_orig->car.data.str);
-                }
-
-                break;
-            }
-            case Lam:
-                curr_copy->car.type = Lam;
-                curr_copy->car.data.lam = malloc(sizeof(Lambda));
-                curr_copy->car.data.lam->n_args = curr_orig->car.data.lam->n_args;
-                curr_copy->car.data.lam->p_keys = malloc(sizeof(Vector) * curr_copy->car.data.lam->n_args);
-
-                for (int i = 0; i < curr_orig->car.data.lam->n_args; i++)
-                {
-                    curr_copy->car.data.lam->p_keys[i] = v_init();
-                    v_copy(curr_copy->car.data.lam->p_keys[i], curr_orig->car.data.lam->p_keys[i]);
-                }
-
-                curr_copy->car.data.lam->instructions = malloc(sizeof(Expr));
-
-                eq_append(&orig_queue, curr_orig->car.data.lam->instructions);
-                eq_append(&copy_queue, curr_copy->car.data.lam->instructions);
-                break;
-            case Nat:
-                curr_copy->car.type = Nat;
-                curr_copy->car.data.nat = malloc(sizeof(Native));
-                curr_copy->car.data.nat->n_args = curr_orig->car.data.nat->n_args;
-                
-                curr_copy->car.data.nat->key = v_init();
-                v_copy(curr_copy->car.data.nat->key, curr_orig->car.data.nat->key);
-                
-                if(curr_orig->car.data.nat->params)
-                {
-                    curr_copy->car.data.nat->params = malloc(sizeof(Expr) * curr_orig->car.data.nat->n_args);
-                    
-                    for(int i = 0; i < curr_orig->car.data.nat->n_args; i++)
-                    {
-                        eq_append(&orig_queue, curr_orig->car.data.nat->params[i]);
-                        eq_append(&copy_queue, curr_copy->car.data.nat->params[i]);
-                    }
-                }
-                else
-                {
-                    curr_copy->car.data.nat->params = NULL;
-                }
-                break;
-            case Lst:
-                curr_copy->car.type = Lst;
-                curr_copy->car.data.lst = malloc(sizeof(Expr));
-
-                eq_append(&orig_queue, curr_orig->car.data.lst);
-                eq_append(&copy_queue, curr_copy->car.data.lst);
-
-                break;
-            case Nil:
-                curr_copy->car.type = Nil;
-
-                break;
-            default:
-                break;
-            }
-
-            if (curr_orig->cdr)
-            {
-                curr_copy->cdr = malloc(sizeof(Expr));
-            }
-
-            curr_orig = curr_orig->cdr;
-            curr_copy = curr_copy->cdr;
-        }
-    }
-
-    return copy;
+		v_copy(copy->car.data.str, orig->car.data.str);
+	}
 }
 
-void e_destruct(Expr *expr)
+void copy_single_expr(Expr *orig, Expr *copy, struct stackPairs *stacks, struct replacements replacements)
 {
-    if (expr == NULL)
-    {
-        return;
-    }
+	switch (orig->car.type) {
+		case Num:
+			copy->car.type = Num;
+			copy->car.data.num = orig->car.data.num;
+			
+			break;
+		case Str:
+			copy->car.type = Str;
+			copy->car.data.str = v_init();
 
-    struct ExprQueue trace;
-    trace.len = 0;
+			v_copy(copy->car.data.str, orig->car.data.str);
 
-    eq_append(&trace, expr);
+			break;
+		case Idr:
+		{
+			int found_match = 0;
 
-    while (trace.len > 0)
-    {
-        Expr *curr = eq_pop(&trace);
+			for (int i = 0; i < replacements.n_replace; i++) 
+			{
+				if(vec_cmp_vec(orig->car.data.str, replacements.replace_keys[i]))
+				{
+					found_match = 1;
 
-        while (curr != NULL)
-        {
-            switch (curr->car.type)
-            {
-            case Lam:
-                for(int i = 0; i < curr->car.data.lam->n_args; i++)
-                {
-                    v_destruct(curr->car.data.lam->p_keys[i]);
-                }
+					es_push(&stacks->orig, replacements.replace_exprs[i]);
+					es_push(&stacks->copy, copy);
+				}
+			}
 
-                eq_append(&trace, curr->car.data.lam->instructions);
+			if(!found_match)
+			{
+				copy->car.type = Idr;
+				copy->car.data.str = v_init();
 
-                free(curr->car.data.lam);
-                break;
-            case Nat:
-                v_destruct(curr->car.data.nat->key);
+				v_copy(copy->car.data.str, orig->car.data.str);
+			}
 
-                if(curr->car.data.nat->params)
-                {
-                    for(int i = 0; i < curr->car.data.nat->n_args; i++)
-                    {
-                        eq_append(&trace, curr->car.data.nat->params[i]);
-                    }
-    
-                    free(curr->car.data.nat);
-                }
-                
-                break;
-            case Lst:
-                eq_append(&trace, curr->car.data.lst);
-                break;
-            default:
-                break;
-            }
+			break;
+		}
+		case Lam:
+			copy->car.type = Lam;
+			copy->car.data.lam = malloc(sizeof(Lambda));
+			copy->car.data.lam->n_args = orig->car.data.lam->n_args;
+			copy->car.data.lam->p_keys = malloc(sizeof(Vector) * copy->car.data.lam->n_args);
 
-            Expr *prev = curr;
-            curr = curr->cdr;
+			for (int i = 0; i < orig->car.data.lam->n_args; i++)
+			{
+				copy->car.data.lam->p_keys[i] = v_init();
+				v_copy(copy->car.data.lam->p_keys[i], orig->car.data.lam->p_keys[i]);
+			}
 
-            free(prev);
-        }
-    }
+			copy->car.data.lam->instructions = malloc(sizeof(Expr));
+
+			es_push(&stacks->orig, orig->car.data.lam->instructions);
+			es_push(&stacks->copy, copy->car.data.lam->instructions);
+
+			break;
+		case IfE:
+			copy->car.type = IfE;
+			copy->car.data.ifE = malloc(sizeof(IfElse));
+
+			copy->car.data.ifE->branch_true = malloc(sizeof(Expr));
+			copy->car.data.ifE->branch_false = malloc(sizeof(Expr));
+
+			es_push(&stacks->orig, orig->car.data.ifE->branch_true);
+			es_push(&stacks->copy, copy->car.data.ifE->branch_true);
+			es_push(&stacks->orig, orig->car.data.ifE->branch_false);
+			es_push(&stacks->copy, copy->car.data.ifE->branch_false);
+			break;
+		case Nat:
+			copy->car.type = Nat;
+			copy->car.data.nat = malloc(sizeof(Native));
+			copy->car.data.nat->n_args = orig->car.data.nat->n_args;
+			copy->car.data.nat->n_filled = orig->car.data.nat->n_filled;
+
+			copy->car.data.nat->key = v_init();
+			v_copy(copy->car.data.nat->key, orig->car.data.nat->key);
+
+			if(orig->car.data.nat->params)
+			{
+				copy->car.data.nat->params = malloc(sizeof(Expr) * orig->car.data.nat->n_args);
+
+				for(int i = 0; i < orig->car.data.nat->n_filled; i++)
+				{
+					copy->car.data.nat->params[i] = malloc(sizeof(Expr));
+
+					es_push(&stacks->orig, orig->car.data.nat->params[i]);
+					es_push(&stacks->copy, copy->car.data.nat->params[i]);
+				}
+			}
+			else 
+			{
+				copy->car.data.nat->params = NULL;
+			}
+
+			break;
+		case Def:
+			copy->car.type = Def;
+
+			copy->car.data.str = v_init();
+			v_copy(copy->car.data.str, orig->car.data.str);
+
+			break;
+		case Lst:
+			copy->car.type = Lst;
+			copy->car.data.lst = malloc(sizeof(Expr));
+
+			es_push(&stacks->orig, orig->car.data.lst);
+			es_push(&stacks->copy, copy->car.data.lst);
+
+			break;
+		case Nil:
+			copy->car.type = Nil;
+
+			break;
+		case Tru:
+			copy->car.type = Tru;
+			
+			break;
+		case Fls:
+			copy->car.type = Fls;
+
+			break;
+		default:
+			break;
+	}
+}
+
+Expr *new_copy(Expr *e, struct replacements replacements, int CDR_OPTION)
+{
+	struct stackPairs stack_pair;
+
+	stack_pair.copy.len = 0;
+	stack_pair.orig.len = 0;
+
+	stack_pair.orig.max_len = MAX_EXPR_STACK_SIZE;
+	stack_pair.copy.max_len = MAX_EXPR_STACK_SIZE;
+
+	Expr *final_copy = malloc(sizeof(Expr));
+	final_copy->cdr = NULL;
+
+	Expr *orig = e;
+	Expr *copy = final_copy;
+
+	if(CDR_OPTION == EXCLUDE_CDR)
+	{
+		copy_single_expr(orig, copy, &stack_pair, replacements);
+	}
+	else if(CDR_OPTION == INCLUDE_CDR)
+	{
+		es_push(&stack_pair.orig, e);
+		es_push(&stack_pair.copy, copy);
+	}
+	else 
+	{
+		printf("not an option for copy\n");
+	}
+
+
+	while(stack_pair.copy.len > 0)
+	{
+		orig = es_pop(&stack_pair.orig);
+		copy = es_pop(&stack_pair.copy);
+
+		// TODO: ensure that .cdr is always NULL
+
+		while(orig != NULL)
+		{
+			copy_single_expr(orig, copy, &stack_pair, replacements);
+
+			if(orig->cdr != NULL)
+			{
+				copy->cdr = malloc(sizeof(Expr));
+				copy = copy->cdr;
+				copy->cdr = NULL;
+			}
+
+			orig = orig->cdr;
+		}
+	}
+
+	return final_copy;
+}
+
+void destroy_single_expr(Expr *e, struct ExprStack *trace)
+{
+	switch(e->car.type)
+	{
+		case Num:
+			break;
+		case Str:
+			v_destruct(e->car.data.str);
+			break;
+		case Idr:
+			v_destruct(e->car.data.str);
+			break;
+		case Lam:
+			for(int i = 0; i < e->car.data.lam->n_args; i++)
+			{
+				v_destruct(e->car.data.lam->p_keys[i]);
+			}
+			es_push(trace, e->car.data.lam->instructions);
+			break;
+		case IfE:
+			es_push(trace, e->car.data.ifE->branch_true);
+			es_push(trace, e->car.data.ifE->branch_false);
+			break;
+		case Nat:
+			v_destruct(e->car.data.nat->key);
+
+			if(e->car.data.nat->params)
+			{
+				for(int i = 0; i < e->car.data.lam->n_args; i++)
+				{
+					es_push(trace, e->car.data.nat->params[i]);
+				}
+			}
+			break;
+		case Def:
+			v_destruct(e->car.data.str);
+			break;
+		case Lst:
+			es_push(trace, e->car.data.lst);
+			break;
+		case Nil:
+			break;
+		case Tru:
+			break;
+		case Fls:
+			break;
+		default:
+			break;
+	}
+
+	free(e);
+}
+
+void new_destruct(Expr *expr, int CDR_OPTION)
+{
+	if(!expr)
+	{
+		return;
+	}
+
+	struct ExprStack trace;
+	trace.len = 0;
+	trace.max_len = MAX_EXPR_STACK_SIZE;
+
+	if(CDR_OPTION == EXCLUDE_CDR)
+	{
+		destroy_single_expr(expr, &trace);
+	}
+	else if(CDR_OPTION == INCLUDE_CDR)
+	{
+		es_push(&trace, expr);
+	}
+	else 
+	{
+		printf("Not an option for destruct.\n");
+	}
+
+	while(trace.len > 0)
+	{
+		Expr *e_curr = es_pop(&trace);
+
+		while(e_curr != NULL)
+		{
+			Expr *next = e_curr->cdr;
+			
+			destroy_single_expr(e_curr, &trace);
+
+			e_curr = next;
+		}
+	}
 }
 
 void e_print(Expr *expr)
@@ -268,10 +425,16 @@ void e_print(Expr *expr)
                     printf(" ");
                 }
             }
-            printf(") -> (");
+            printf(") -> ");
             e_print(curr->car.data.lam->instructions);
-            printf(")");
             break;
+		case IfE:
+			printf("if { ");
+			e_print(curr->car.data.ifE->branch_true);
+			printf(" else ");
+			e_print(curr->car.data.ifE->branch_false);
+			printf(" }");
+			break;
         case Nat:
             printf("__");
             v_print(curr->car.data.nat->key);
@@ -279,7 +442,21 @@ void e_print(Expr *expr)
             printf("(");
             for (int i = 0; i < curr->car.data.nat->n_args; i++)
             {
-                printf("%c", ('a' + i));
+				if(curr->car.data.nat->params)
+				{
+					if(curr->car.data.nat->params[i])
+					{
+						e_print(curr->car.data.nat->params[i]);
+					}
+					else
+					{	
+						printf("%c", ('a' + i));
+					}
+				}
+				else 
+				{
+					printf("%c", ('a' + i));
+				}
 
                 if (i < curr->car.data.nat->n_args - 1)
                 {
@@ -288,6 +465,11 @@ void e_print(Expr *expr)
             }
             printf(")");
             break;
+		case Def:
+			printf("__define (");
+			v_print(curr->car.data.str);
+			printf(")__");
+			break;
         case Lst:
             printf("(");
             e_print(curr->car.data.lst);
@@ -296,6 +478,11 @@ void e_print(Expr *expr)
         case Nil:
             printf("nil");
             break;
+		case Tru:
+			printf("#t");
+			break;
+		case Fls:
+			printf("#f");
 
         default:
             break;

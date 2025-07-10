@@ -2,11 +2,13 @@
 #include <stdlib.h>
 
 #include "parse.h"
+#include "lexer.h"
+#include "types.h"
 
 struct ExprStack
 {
     int len;
-    Expr *stack[256];
+    Expr *stack[MAX_EXPR_STACK_SIZE];
 };
 
 static int within_bounds(int value, int a, int b)
@@ -19,18 +21,6 @@ static int within_bounds(int value, int a, int b)
     {
         return 0;
     }
-}
-
-unsigned int powi(unsigned int a, unsigned int b)
-{
-    unsigned int acc = 1;
-
-    for(int i = 0; i < b; i++)
-    {
-        acc *= a;
-    }
-
-    return acc;
 }
 
 static Expr *es_pop(struct ExprStack *es)
@@ -49,7 +39,7 @@ static Expr *es_pop(struct ExprStack *es)
 
 static void es_append(struct ExprStack *es, Expr *expr)
 {
-    if(es->len >= 256)
+    if(es->len >= MAX_EXPR_STACK_SIZE)
     {
         printf("ERROR: Parsing has exceeded maximum depth");
         abort();
@@ -69,7 +59,7 @@ void parse_num(Expr *e, char *buf, int *c)
 
     while(within_bounds(buf[*c + i], '0', '9'))
     {
-        e->car.data.num *= powi(10, i);
+        e->car.data.num *= 10;
         e->car.data.num += INT_FROM_CHAR(buf[*c + i]);
 
         i++;
@@ -145,6 +135,8 @@ Expr *parse(char *buf, int len, struct TokenBuffer *tokens)
             }
             else
             {
+
+				// FOR REWRITE: this is not needed
                 e_curr->car.type = Nil;
 
                 c++;
@@ -163,7 +155,7 @@ Expr *parse(char *buf, int len, struct TokenBuffer *tokens)
 
             c++;
 
-            if(tokens->tokens[t+1] != Space && tokens->tokens[t+1] != C_Paren && tokens->tokens[t+1] != End)
+            if(tokens->tokens[t+1] != Space && tokens->tokens[t+1] != C_Paren && tokens->tokens[t+1] != Undef && tokens->tokens[t+1] != End)
             {
                 e_curr->cdr = malloc(sizeof(Expr));
                 e_curr = e_curr->cdr;
@@ -177,8 +169,9 @@ Expr *parse(char *buf, int len, struct TokenBuffer *tokens)
             }
             if(tokens->tokens[t] == Undef)
             {
-                printf("ERROR: Undefined Token at %d\n", c);
-                abort();
+				c++;
+                // printf("ERROR: Undefined Token at %d\n", c);
+                // abort();
             }
             if(tokens->tokens[t] == Number)
             {
@@ -193,7 +186,7 @@ Expr *parse(char *buf, int len, struct TokenBuffer *tokens)
                 parse_str(e_curr, buf, &c);
             }
 
-            if(tokens->tokens[t+1] != Space && tokens->tokens[t+1] != C_Paren && tokens->tokens[t+1] != End)
+            if(tokens->tokens[t+1] != Space && tokens->tokens[t+1] != C_Paren && tokens->tokens[t+1] != Undef && tokens->tokens[t+1] != End)
             {
                 e_curr->cdr = malloc(sizeof(Expr));
                 e_curr = e_curr->cdr;
