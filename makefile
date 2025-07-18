@@ -25,6 +25,6 @@ clean:
 	@$(RM) -rv $(BIN_DIR) $(OBJ_DIR)
 
 run: $(EXE)
-	@./$(EXE) input.lsp
+	@./$(EXE) input-advanced.lsp
 
 -include $(OBJ:.o=.d)

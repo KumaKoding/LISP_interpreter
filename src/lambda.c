@@ -3,34 +3,40 @@
 #include <string.h>
 
 #include "eval.h"
+#include "environment.h"
 #include "types.h"
 
-Expr *handle_lambda(struct StackFrame frame)
+Expr *handle_lambda(struct StackFrame frame, Environment *env)
 {
 	Lambda *function = frame.fn->car.data.lam;
 	
-	if(function->n_args == frame.params_evaluated)
+	if(function->n_args == frame.params_evaluated + function->n_filled)
 	{
-		return new_copy(function->instructions, REPLACE(function->p_keys, frame.params, frame.params_evaluated), EXCLUDE_CDR);
+		env->depth++;
+
+		for(int i = 0; i < function->n_args; i++)
+		{
+			if(i < function->n_filled)
+			{
+				map_push(&env->env[env->depth], init_map_pair(function->p_keys[i], function->params[i]));
+			}
+			else 
+			{
+				map_push(&env->env[env->depth], init_map_pair(function->p_keys[i], frame.params[i - function->n_filled]));
+			}
+		}
+
+		return new_copy(function->instructions, NO_REPLACE, EXCLUDE_CDR);
 	}
 	else if(function->n_args > frame.params_evaluated)
 	{
-		Expr *new_lambda = malloc(sizeof(Expr));
-		new_lambda->car.type = Lam;
-
-		new_lambda->car.data.lam = malloc(sizeof(Lambda));
-		new_lambda->car.data.lam->p_keys = malloc(sizeof(Vector) * (function->n_args - frame.params_evaluated));
-		new_lambda->car.data.lam->instructions = new_copy(function->instructions, REPLACE(function->p_keys, frame.params, frame.params_evaluated), EXCLUDE_CDR);
-
-		new_lambda->car.data.lam->n_args = function->n_args - frame.params_evaluated;
-
-		for(int i = 0; i < new_lambda->car.data.lam->n_args; i++)
+		for(int i = 0; i < frame.params_evaluated; i++)
 		{
-			new_lambda->car.data.lam->p_keys[i] = v_init();
-			v_copy(new_lambda->car.data.lam->p_keys[i], function->p_keys[frame.params_evaluated + i]);
+			function->params[function->n_filled] = frame.params[i];
+			function->n_filled++;
 		}
 
-		return new_lambda;
+		return frame.fn;
 	}
 	else 
 	{
@@ -94,8 +100,10 @@ Expr *create_lambda(Expr *e)
 		arg_ptr = arg_ptr->cdr;
 	}
 
+	new_lambda->car.data.lam->n_filled = 0;
 	new_lambda->car.data.lam->n_args = n_args;
 	new_lambda->car.data.lam->p_keys = malloc(sizeof(Vector) * n_args);
+	new_lambda->car.data.lam->params = malloc(sizeof(Expr *) * n_args);
 
 	arg_ptr = inner->cdr->car.data.lst;
 

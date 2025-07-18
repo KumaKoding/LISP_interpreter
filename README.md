@@ -15,4 +15,4 @@ In the future, there will be:
 ## Instructions
 1. Clone directory
 2. run `make` in terminal
-3. run `./bin/lisp`
+3. run `make run`

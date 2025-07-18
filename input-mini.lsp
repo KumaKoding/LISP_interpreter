@@ -1,1 +1,2 @@
-((lambda (x) (print x)) 11)
+(define f (lambda (n) (f n)))
+(f 1)

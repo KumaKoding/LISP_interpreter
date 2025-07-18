@@ -4,12 +4,6 @@
 
 #include "types.h"
 
-struct ExprQueue
-{
-    Expr *buf[256];
-    int len;
-};
-
 struct ExprStack
 {
     int len;
@@ -41,50 +35,6 @@ Expr *es_pop(struct ExprStack *es)
     es->len--;
 
     return e;
-}
-
-Expr *eq_pop(struct ExprQueue *queue)
-{
-    if (queue->len <= 0)
-    {
-        printf("nothing in queue\n");
-        return NULL;
-    }
-
-    Expr *first = queue->buf[0];
-
-    if (queue->len == 1)
-    {
-        queue->buf[0] = NULL;
-        queue->len--;
-    }
-    else if (queue->len > 1)
-    {
-        for (int i = 0; i < queue->len - 1; i++)
-        {
-            queue->buf[i] = queue->buf[i + 1];
-
-            if (i == queue->len - 1)
-            {
-                queue->buf[i + 1] = NULL;
-            }
-        }
-
-        queue->len--;
-    }
-
-    return first;
-}
-
-void eq_append(struct ExprQueue *queue, Expr *expr)
-{
-    if (queue->len >= 256)
-    {
-        printf("ERROR: copy has exceeded maximum depth");
-    }
-
-    queue->buf[queue->len] = expr;
-    queue->len++;
 }
 
 struct stackPairs
@@ -161,12 +111,22 @@ void copy_single_expr(Expr *orig, Expr *copy, struct stackPairs *stacks, struct 
 			copy->car.type = Lam;
 			copy->car.data.lam = malloc(sizeof(Lambda));
 			copy->car.data.lam->n_args = orig->car.data.lam->n_args;
+			copy->car.data.lam->n_filled = orig->car.data.lam->n_filled;
 			copy->car.data.lam->p_keys = malloc(sizeof(Vector) * copy->car.data.lam->n_args);
+			copy->car.data.lam->params = malloc(sizeof(Expr *) * copy->car.data.lam->n_args);
 
 			for (int i = 0; i < orig->car.data.lam->n_args; i++)
 			{
 				copy->car.data.lam->p_keys[i] = v_init();
 				v_copy(copy->car.data.lam->p_keys[i], orig->car.data.lam->p_keys[i]);
+
+				if(i < orig->car.data.lam->n_filled)
+				{
+					copy->car.data.lam->params[i] = malloc(sizeof(Expr));
+
+					es_push(&stacks->orig, orig->car.data.lam->params[i]);
+					es_push(&stacks->copy, copy->car.data.lam->params[i]);
+				}
 			}
 
 			copy->car.data.lam->instructions = malloc(sizeof(Expr));
@@ -223,10 +183,17 @@ void copy_single_expr(Expr *orig, Expr *copy, struct stackPairs *stacks, struct 
 			break;
 		case Lst:
 			copy->car.type = Lst;
-			copy->car.data.lst = malloc(sizeof(Expr));
 
-			es_push(&stacks->orig, orig->car.data.lst);
-			es_push(&stacks->copy, copy->car.data.lst);
+			if(orig->car.data.lst)
+			{
+				copy->car.data.lst = malloc(sizeof(Expr));
+				es_push(&stacks->orig, orig->car.data.lst);
+				es_push(&stacks->copy, copy->car.data.lst);
+			}
+			else
+			{
+				copy->car.data.lst = NULL;
+			}
 
 			break;
 		case Nil:
@@ -318,8 +285,16 @@ void destroy_single_expr(Expr *e, struct ExprStack *trace)
 			for(int i = 0; i < e->car.data.lam->n_args; i++)
 			{
 				v_destruct(e->car.data.lam->p_keys[i]);
+
+				if(i < e->car.data.lam->n_filled)
+				{
+					es_push(trace, e->car.data.lam->params[i]);
+				}
 			}
+
 			es_push(trace, e->car.data.lam->instructions);
+
+			free(e->car.data.lam->params);
 			break;
 		case IfE:
 			es_push(trace, e->car.data.ifE->branch_true);
@@ -335,6 +310,8 @@ void destroy_single_expr(Expr *e, struct ExprStack *trace)
 					es_push(trace, e->car.data.nat->params[i]);
 				}
 			}
+
+			free(e->car.data.nat->params);
 			break;
 		case Def:
 			v_destruct(e->car.data.str);
@@ -418,7 +395,14 @@ void e_print(Expr *expr)
             printf("(");
             for (int i = 0; i < curr->car.data.lam->n_args; i++)
             {
-                v_print(curr->car.data.lam->p_keys[i]);
+				if(i < curr->car.data.lam->n_filled)
+				{
+					e_print(curr->car.data.lam->params[i]);
+				}
+				else 
+				{	
+					v_print(curr->car.data.lam->p_keys[i]);
+				}
 
                 if (i < curr->car.data.lam->n_args - 1)
                 {
@@ -488,10 +472,14 @@ void e_print(Expr *expr)
             break;
         }
 
-        if (curr->cdr != NULL)
-        {
-            printf(" ");
-        }
+		if (curr->cdr)
+		{
+			// if(curr->cdr->cdr == NULL && curr->cdr->car.type != Nil)
+			// {
+			// 	printf(" .");
+			// }
+			printf(" ");
+		}
 
         curr = curr->cdr;
     }

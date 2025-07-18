@@ -9,7 +9,7 @@ Expr *handle_ifelse(struct StackFrame frame)
 {
 	IfElse *function = frame.fn->car.data.ifE;
 
-	if(frame.params[0]->car.type != Fls)
+	if(frame.params[0]->car.type != Fls && frame.params[0]->car.type != Nil)
 	{
 		return function->branch_true;
 	}
@@ -22,9 +22,15 @@ Expr *handle_ifelse(struct StackFrame frame)
 Expr *create_ifelse(Expr *e)
 {
 	Expr *new_ifelse = malloc(sizeof(Expr));
-	new_ifelse->cdr = NULL;
+	new_ifelse->car.type = IfE;
+	new_ifelse->car.data.ifE = malloc(sizeof(IfElse));
 
 	Expr *inner = e->car.data.lst;
+
+	new_ifelse->car.data.ifE->branch_true = new_copy(inner->cdr->cdr, NO_REPLACE, EXCLUDE_CDR);
+	new_ifelse->car.data.ifE->branch_false = new_copy(inner->cdr->cdr->cdr, NO_REPLACE, EXCLUDE_CDR);
+
+	return new_ifelse;
 }
 
 int identify_ifelse(Expr *e)

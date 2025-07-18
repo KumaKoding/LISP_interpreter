@@ -4,7 +4,7 @@
 #define VECTOR_INIT_SIZE 8
 #define PTABLE_INIT_SIZE 16
 
-#define MAX_CALL_STACK_SIZE 256
+#define MAX_CALL_STACK_SIZE 4092
 #define MAX_EXPR_STACK_SIZE 256
 
 #define INCLUDE_CDR 1
@@ -84,8 +84,10 @@ struct Expr
 struct Lambda
 {
     Vector **p_keys;
+	Expr **params;
     Expr *instructions;
     int n_args;
+	int n_filled;
 };
 
 struct IfElse

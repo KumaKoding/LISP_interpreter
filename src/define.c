@@ -3,11 +3,12 @@
 #include <string.h>
 
 #include "eval.h"
+#include "environment.h"
 #include "types.h"
 
-Expr *handle_define(struct StackFrame frame, PairTable *pt)
+Expr *handle_define(struct StackFrame frame, Environment *env)
 {
-	pt_insert(pt, frame.fn->car.data.str, frame.params[0]);
+	map_push(&env->env[env->depth], init_map_pair(frame.fn->car.data.str, frame.params[0]));
 
 	Expr *nil = malloc(sizeof(Expr));
 	nil->car.type = Nil;

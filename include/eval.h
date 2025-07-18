@@ -2,6 +2,10 @@
 #define EVAL_H
 
 #include "types.h"
+#include "environment.h"
+
+#define DEFINE_ARGS 1
+#define IFELSE_ARGS 1
 
 struct StackFrame
 {
@@ -13,6 +17,7 @@ struct StackFrame
 	int params_evaluated;
 
 	Expr **return_addr;
+	int return_depth;
 };
 
 struct CallStack
@@ -21,22 +26,20 @@ struct CallStack
 	struct StackFrame stack[MAX_CALL_STACK_SIZE];
 };
 
-Expr *handle_lambda(struct StackFrame frame);
+Expr *handle_lambda(struct StackFrame frame, Environment *env);
 int identify_lambda(Expr *e);
 Expr *create_lambda(Expr *e);
 
-Expr *run_native(Native function);
 Expr *handle_native(struct StackFrame frame);
-void init_natives(PairTable *pt);
+void init_natives(Environment *env);
 
 Expr *handle_ifelse(struct StackFrame frame);
 Expr *create_ifelse(Expr *e);
 int identify_ifelse(Expr *e);
 
-Expr *handle_define(struct StackFrame frame, PairTable *pt);
+Expr *handle_define(struct StackFrame frame, Environment *env);
 Expr *create_define(Expr *e);
 int identify_define(Expr *e);
-
 
 Expr *eval(Expr *e);
 

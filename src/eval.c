@@ -4,6 +4,7 @@
 #include <string.h>
 
 #include "eval.h"
+#include "environment.h"
 #include "types.h"
 
 int count_exprs(Expr *e)
@@ -39,6 +40,8 @@ void cs_push(int n_params, Expr **return_addr, struct CallStack *cs)
 	cs->stack[cs->len].fn = NULL;
 	cs->stack[cs->len].function_evaluated = 0;
 
+	cs->stack[cs->len].return_depth = 0;
+
 	cs->len++;
 }
 
@@ -66,7 +69,7 @@ void add_fn(Expr *e, Expr **return_addr, struct CallStack *cs)
 	}
 }
 
-Expr *evaluate_frame(struct StackFrame f_curr, struct CallStack *cs, PairTable *pt)
+Expr *evaluate_frame(struct StackFrame f_curr, struct CallStack *cs, Environment *env)
 {
 	Expr *return_value = NULL;
 
@@ -74,6 +77,13 @@ Expr *evaluate_frame(struct StackFrame f_curr, struct CallStack *cs, PairTable *
 	cs->stack[cs->len - 1].params_evaluated = 0;
 	cs->stack[cs->len - 1].params_available = 0;
 	cs->stack[cs->len - 1].function_evaluated = 0;
+	
+	for(int i = 0; i < cs->stack[cs->len - 1].return_depth; i++)
+	{
+		env_pop(env);
+	}
+
+	cs->stack[cs->len - 1].return_depth = 0;
 
 	if(cs->stack[cs->len - 1].params_available > 0)
 	{
@@ -85,21 +95,26 @@ Expr *evaluate_frame(struct StackFrame f_curr, struct CallStack *cs, PairTable *
 	switch (f_curr.fn->car.type) 
 	{
 		case Lam:
-			return_value = handle_lambda(f_curr);
-
-			if(return_value->car.type == Lst)
 			{
-				add_fn(return_value, f_curr.return_addr, cs);
-			}
+				int full_apply = 1;
+				Lambda lam = *f_curr.fn->car.data.lam;
 
+				if(lam.n_args != lam.n_filled + f_curr.params_evaluated)
+				{
+					full_apply = 0;
+				}
+
+				return_value = handle_lambda(f_curr, env);
+
+				if(full_apply)
+				{
+					add_fn(return_value, f_curr.return_addr, cs);
+					cs->stack[cs->len - 1].return_depth++;
+				}
+			}
 			break;
 		case Nat:
 			return_value = handle_native(f_curr);
-
-			if(return_value->car.type == Lst)
-			{
-				add_fn(return_value, f_curr.return_addr, cs);
-			}
 
 			break;
 		case IfE:
@@ -112,7 +127,7 @@ Expr *evaluate_frame(struct StackFrame f_curr, struct CallStack *cs, PairTable *
 			
 			break;
 		case Def:
-			return_value = handle_define(f_curr, pt);
+			return_value = handle_define(f_curr, env);
 
 			break;
 		default:
@@ -121,7 +136,28 @@ Expr *evaluate_frame(struct StackFrame f_curr, struct CallStack *cs, PairTable *
 			break;
 	}
 
+
 	return return_value;
+}
+
+void print_env(Environment env)
+{
+	printf("{\n");
+
+	for(int i = 0; i <= env.depth; i++)
+	{
+		for(int j = 0; j < env.env[i].len; j++)
+		{
+			printf("\te%d[%d]\t", i, j);
+			v_print(env.env[i].map[j].v);
+			printf("\t=>\t");
+			e_print(env.env[i].map[j].e);
+			printf("\n");
+		}
+	}
+
+	printf("}\n");
+
 }
 
 void print_cs(struct CallStack cs)
@@ -141,6 +177,7 @@ void print_cs(struct CallStack cs)
 			e_print(param_copy);
 			printf(" ");
 		}
+		printf("\t%d", cs.stack[i].return_depth);
 
 		printf("\n");
 	}
@@ -176,14 +213,14 @@ int init_stack(Expr *e, struct CallStack *cs, Expr **return_addr)
 
 Expr* eval(Expr *e)
 {
-	PairTable *pt = pt_init();
+	Environment env = init_environment();
 	struct CallStack cs;
 
 	cs.len = 0;
 
 	Expr *return_value;
 
-	init_natives(pt);
+	init_natives(&env);
 
 	if(!init_stack(e, &cs, &return_value))
 	{
@@ -191,8 +228,13 @@ Expr* eval(Expr *e)
 		abort();
 	}
 
+	int cycles = 0;
+
 	while(cs.len > 0)
 	{
+		cycles++;
+		// printf("CURRENT DEPTH: %d\n", env.depth);
+		// print_env(env);
 		// print_cs(cs);
 		// printf("\n");
 		struct StackFrame *f_curr = &cs.stack[cs.len - 1];
@@ -215,7 +257,7 @@ Expr* eval(Expr *e)
 		else
 		{
 			return_addr = f_curr->return_addr;
-			*return_addr = evaluate_frame(*f_curr, &cs, pt);
+			*return_addr = evaluate_frame(*f_curr, &cs, &env);
 		}
 
 		if(e_curr)
@@ -234,30 +276,43 @@ Expr* eval(Expr *e)
 				{
 					*return_addr = create_lambda(e_curr);
 				}
+				else if(identify_ifelse(e_curr))
+				{
+					cs_push(IFELSE_ARGS, return_addr, &cs);
+					cs.stack[cs.len - 1].fn = create_ifelse(e_curr);
+					cs.stack[cs.len - 1].params[0] = e_curr->car.data.lst->cdr;
+
+					cs.stack[cs.len - 1].function_evaluated = 1;
+				}
 				else if(identify_define(e_curr))
 				{
-					cs_push(1, return_addr, &cs);
+					cs_push(DEFINE_ARGS, return_addr, &cs);
 					cs.stack[cs.len - 1].fn = create_define(e_curr);
 					cs.stack[cs.len - 1].params[0] = e_curr->car.data.lst->cdr->cdr;
 
 					cs.stack[cs.len - 1].function_evaluated = 1;
 				}
 				else 
-				{	
+				{
 					add_fn(e_curr->car.data.lst, return_addr, &cs);
+
+					env.depth++;
+					cs.stack[cs.len - 1].return_depth++;
 				}
 			}
 			else if(e_curr->car.type == Idr)
 			{
-				Pair *search = pt_find(pt, e_curr->car.data.str);
+				Expr *search = env_search(e_curr->car.data.str, env);
 
 				if(search)
 				{
-					*return_addr = new_copy(search->instructions, NO_REPLACE, EXCLUDE_CDR);
+					*return_addr = new_copy(search, NO_REPLACE, EXCLUDE_CDR);
 				}
 				else 
 				{
-					printf("ERROR: Unexpected identifier. Aborting.");
+					printf("ERROR: Unexpected identifier *");
+					v_print(e_curr->car.data.str);
+					printf(". Aborting.\n");
 					abort();
 				}
 			}
@@ -267,6 +322,8 @@ Expr* eval(Expr *e)
 			}
 		}
 	}
+
+	printf("CYCLES=%d\n", cycles);
 
 	return return_value;
 }
