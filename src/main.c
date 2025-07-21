@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "callstack.h"
 #include "types.h"
 #include "input.h"
 #include "lexer.h"
@@ -64,20 +65,46 @@ int main(int argc, const char *argv[])
 
 	printf("\n\n");
 
-	Expr *expr = parse(clean_input, t_buf);
+	Expr *first_pass = parse(clean_input, t_buf);
 
-	e_print(expr);
+	e_print(first_pass);
 	printf("\n\n");
 
-	Expr *output = eval(expr);
+	Expr *second_pass = parse_special_forms(first_pass);
 
-	e_print(output);
-	printf("\n");
+	e_print(second_pass);
+	printf("\n\n");
+
+	struct CallStack cs;
+	cs.len = 1;
+	cs.stack[0] = (struct StackFrame){0};
+	cs.stack[0].local_references = init_map();
+	init_natives(&cs);
+
+	Expr *temp = second_pass->cdr;
+	second_pass->cdr = NULL;
+
+	while(second_pass)
+	{
+		Expr *output = eval(second_pass, &cs);
+
+		e_print(output);
+		printf("\n\n");
+
+		second_pass = temp;
+
+		if(temp)
+		{
+			temp = second_pass->cdr;
+			second_pass->cdr = NULL;
+		}
+	}
 
 	free(buf);
 	free(clean_input.data);
 	free(t_buf.tokens);
-	new_destruct(expr, INCLUDE_CDR);
-
+	new_destruct(first_pass, INCLUDE_CDR);
+	new_destruct(second_pass, INCLUDE_CDR);
+	//
     return 0;
 }

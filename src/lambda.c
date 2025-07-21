@@ -2,49 +2,54 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "eval.h"
-#include "environment.h"
-#include "types.h"
+#include "parse.h"
 
-Expr *handle_lambda(struct StackFrame frame, Environment *env)
-{
-	Lambda *function = frame.fn->car.data.lam;
-	
-	if(function->n_args == frame.params_evaluated + function->n_filled)
-	{
-		env->depth++;
+// #include "eval.h"
+// #include "callstack.h"
 
-		for(int i = 0; i < function->n_args; i++)
-		{
-			if(i < function->n_filled)
-			{
-				map_push(&env->env[env->depth], init_map_pair(function->p_keys[i], function->params[i]));
-			}
-			else 
-			{
-				map_push(&env->env[env->depth], init_map_pair(function->p_keys[i], frame.params[i - function->n_filled]));
-			}
-		}
-
-		return new_copy(function->instructions, NO_REPLACE, EXCLUDE_CDR);
-	}
-	else if(function->n_args > frame.params_evaluated)
-	{
-		for(int i = 0; i < frame.params_evaluated; i++)
-		{
-			function->params[function->n_filled] = frame.params[i];
-			function->n_filled++;
-		}
-
-		return frame.fn;
-	}
-	else 
-	{
-		printf("ERROR: Too many parameters applied to lambda function. Aborting.");
-		abort();
-	}
-}
-
+// Expr *handle_lambda(struct CallStack *cs)
+// {
+// 	struct StackFrame frame = cs->stack[cs->len - 1];
+//
+// 	Lambda *function = frame.fn->car.data.lam;
+//
+// 	if(function->n_args == frame.params_evaluated + function->n_filled)
+// 	{
+// 		for(int i = 0; i < function->n_args; i++)
+// 		{
+// 			if(i < function->n_filled)
+// 			{
+// 				map_push(frame.local_references, init_map_pair(function->p_keys[i], function->params[i]));
+// 			}
+// 			else 
+// 			{
+// 				map_push(frame.local_references, init_map_pair(function->p_keys[i], frame.params[i - function->n_filled]));
+// 			}
+// 		}
+//
+// 		Expr *instructions = new_copy(function->instructions, NO_REPLACE, EXCLUDE_CDR);
+//
+// 		add_fn(new_copy(function->instructions, NO_REPLACE, EXCLUDE_CDR), frame.return_addr, cs);
+//
+// 		return instructions;
+// 	}
+// 	else if(function->n_args > frame.params_evaluated)
+// 	{
+// 		for(int i = 0; i < frame.params_evaluated; i++)
+// 		{
+// 			function->params[function->n_filled] = frame.params[i];
+// 			function->n_filled++;
+// 		}
+//
+// 		return frame.fn;
+// 	}
+// 	else 
+// 	{
+// 		printf("ERROR: Too many parameters applied to lambda function. Aborting.");
+// 		abort();
+// 	}
+// }
+//
 int identify_lambda(Expr *e)
 {
 	if(!e->car.data.lst)
@@ -82,13 +87,12 @@ int identify_lambda(Expr *e)
 	return 1;
 }
 
-Expr *create_lambda(Expr *e)
+void create_lambda(Expr *copy, Expr *orig)
 {
-	Expr *new_lambda = malloc(sizeof(Expr));
-	new_lambda->car.type = Lam;
-	new_lambda->car.data.lam = malloc(sizeof(Lambda));
+	copy->car.type = Lam;
+	copy->car.data.lam = malloc(sizeof(Lambda));
 
-	Expr *inner = e->car.data.lst;
+	Expr *inner = orig->car.data.lst;
 
 	Expr *arg_ptr = inner->cdr->car.data.lst;
 	int n_args = 0;
@@ -100,10 +104,10 @@ Expr *create_lambda(Expr *e)
 		arg_ptr = arg_ptr->cdr;
 	}
 
-	new_lambda->car.data.lam->n_filled = 0;
-	new_lambda->car.data.lam->n_args = n_args;
-	new_lambda->car.data.lam->p_keys = malloc(sizeof(Vector) * n_args);
-	new_lambda->car.data.lam->params = malloc(sizeof(Expr *) * n_args);
+	copy->car.data.lam->n_filled = 0;
+	copy->car.data.lam->n_args = n_args;
+	copy->car.data.lam->p_keys = malloc(sizeof(Vector) * n_args);
+	copy->car.data.lam->params = malloc(sizeof(Expr *) * n_args);
 
 	arg_ptr = inner->cdr->car.data.lst;
 
@@ -115,14 +119,12 @@ Expr *create_lambda(Expr *e)
 			abort();
 		}
 
-		new_lambda->car.data.lam->p_keys[i] = v_init();
-		v_copy(new_lambda->car.data.lam->p_keys[i], arg_ptr->car.data.str);
+		copy->car.data.lam->p_keys[i] = v_init();
+		v_copy(copy->car.data.lam->p_keys[i], arg_ptr->car.data.str);
 
 		arg_ptr = arg_ptr->cdr;
 	}
 
-	new_lambda->car.data.lam->instructions = new_copy(inner->cdr->cdr, NO_REPLACE, EXCLUDE_CDR);
-
-	return new_lambda;
+	copy->car.data.lam->instructions = malloc(sizeof(Expr));
 }
 

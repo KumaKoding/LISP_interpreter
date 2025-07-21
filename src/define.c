@@ -2,20 +2,23 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "eval.h"
-#include "environment.h"
-#include "types.h"
+#include "parse.h"
 
-Expr *handle_define(struct StackFrame frame, Environment *env)
-{
-	map_push(&env->env[env->depth], init_map_pair(frame.fn->car.data.str, frame.params[0]));
-
-	Expr *nil = malloc(sizeof(Expr));
-	nil->car.type = Nil;
-	nil->cdr = NULL;
-
-	return nil;
-}
+// #include "eval.h"
+// #include "callstack.h"
+//
+// Expr *handle_define(struct CallStack *cs)
+// {
+// 	struct StackFrame frame = cs->stack[cs->len - 1];
+// 	// put the variable into the previous stack frame
+// 	map_push(cs->stack[cs->len - 2].local_references, init_map_pair(frame.fn->car.data.str, frame.params[0]));
+//
+// 	Expr *nil = malloc(sizeof(Expr));
+// 	nil->car.type = Nil;
+// 	nil->cdr = NULL;
+//
+// 	return nil;
+// }
 
 int identify_define(Expr *e)
 {
@@ -54,15 +57,16 @@ int identify_define(Expr *e)
 	return 1;
 }
 
-Expr *create_define(Expr *e)
+void create_define(Expr *copy, Expr *orig)
 {
-	Expr *new_define = malloc(sizeof(Expr));
-	new_define->car.type = Def;
-	new_define->cdr = NULL;
+	copy->car.type = Lst;
+	copy->car.data.lst = malloc(sizeof(Expr));
 
-	new_define->car.data.str = v_init();
-	v_copy(new_define->car.data.str, e->car.data.lst->cdr->car.data.str);
+	copy->car.data.lst->car.type = Def;
 
-	return new_define;
+	copy->car.data.lst->car.data.str = v_init();
+	v_copy(copy->car.data.lst->car.data.str, orig->car.data.lst->cdr->car.data.str);
+
+	copy->car.data.lst->cdr = malloc(sizeof(Expr));
 }	
 

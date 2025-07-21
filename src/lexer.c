@@ -4,7 +4,6 @@
 
 #include "lexer.h"
 #include "input.h"
-#include "types.h"
 
 void append_token(struct TokenBuffer *buf, Token t)
 {

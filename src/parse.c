@@ -1,16 +1,22 @@
-#include <complex.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "parse.h"
 #include "input.h"
 #include "lexer.h"
 #include "types.h"
 
-struct ExprStack
+// struct ExprStack
+// {
+//     int len;
+//     Expr *stack[MAX_EXPR_STACK_SIZE];
+// };
+//
+struct OptionStack
 {
-    int len;
-    Expr *stack[MAX_EXPR_STACK_SIZE];
+	int len;
+	char options[MAX_EXPR_STACK_SIZE];
 };
 
 struct ParseNum
@@ -25,30 +31,30 @@ struct ParseVec
 	int offset;
 };
 
-static Expr *es_pop(struct ExprStack *es)
+char os_pop(struct OptionStack *os)
 {
-    if(es->len == 0)
-    {
-        return NULL;
-    }
+	if(os->len == 0)
+	{
+		return 0;
+	}
 
-    Expr *e = es->stack[es->len - 1];
-    es->stack[es->len - 1] = NULL;
-    es->len--;
+	char c = os->options[os->len - 1];
+	os->options[os->len - 1] = 0;
+	os->len--;
 
-    return e;
+	return c;
 }
 
-static void es_append(struct ExprStack *es, Expr *expr)
+void os_push(struct OptionStack *os, char option)
 {
-    if(es->len >= MAX_EXPR_STACK_SIZE)
+    if(os->len >= MAX_EXPR_STACK_SIZE)
     {
         printf("PARSE-ERROR: Parsing has exceeded maximum depth. Aborting.");
         abort();
     }
 
-    es->stack[es->len] = expr;
-    es->len++;
+	os->options[os->len] = option;
+	os->len++;
 }
 
 #define INT_FROM_CHAR(c) (c - '0')
@@ -281,6 +287,125 @@ int check_alloc_next(struct TokenBuffer tokens, int t)
 	return 1;
 }
 
+Expr *parse_special_forms(Expr *e)
+{
+	struct OptionStack options;
+	struct ExprStack orig;
+	struct ExprStack copy;
+
+	Expr *final = malloc(sizeof(Expr));
+
+	options.len = 0;
+	orig.len = 0;
+	copy.len = 0;
+
+	os_push(&options, 'I');
+	es_push(&orig, e);
+	es_push(&copy, final);
+
+	while(orig.len > 0)
+	{
+		char option = os_pop(&options);
+		Expr *o = es_pop(&orig);
+		Expr *c = es_pop(&copy);
+
+		while(o)
+		{
+			switch (o->car.type)
+			{
+				case Lst:
+					if(identify_lambda(o))
+					{
+						create_lambda(c, o);
+
+						os_push(&options, 'I');
+						es_push(&orig, o->car.data.lst->cdr->cdr);
+						es_push(&copy, c->car.data.lam->instructions);
+					}
+					else if(identify_define(o))
+					{
+						create_define(c, o);
+
+						os_push(&options, 'X');
+						es_push(&orig, o->car.data.lst->cdr->cdr);
+						es_push(&copy, c->car.data.lst->cdr);
+					}
+					else if(identify_ifelse(o))
+					{
+						create_ifelse(c, o);
+
+						os_push(&options, 'X');
+						es_push(&orig, o->car.data.lst->cdr);
+						es_push(&copy, c->car.data.lst->cdr);
+						os_push(&options, 'X');
+						es_push(&orig, o->car.data.lst->cdr->cdr);
+						es_push(&copy, c->car.data.lst->car.data.ifE->branch_true);
+						os_push(&options, 'X');
+						es_push(&orig, o->car.data.lst->cdr->cdr->cdr);
+						es_push(&copy, c->car.data.lst->car.data.ifE->branch_false);
+					}
+					else 
+					{
+						c->car.type = o->car.type;
+						if(o->car.data.lst)
+						{
+							c->car.data.lst = malloc(sizeof(Expr));
+						}
+						c->mark = o->mark;
+
+						os_push(&options, 'I');
+						es_push(&orig, o->car.data.lst);
+						es_push(&copy, c->car.data.lst);
+					}
+
+					break;
+				case Num:
+					c->car.type = o->car.type;
+					c->car.data.num = o->car.data.num;
+					c->mark = o->mark;
+
+					break;
+				case Str:
+					c->car.type = o->car.type;
+					c->car.data.str = v_init();
+					v_copy(c->car.data.str, o->car.data.str);
+					c->mark = o->mark;
+
+					break;
+				case Idr:
+					c->car.type = o->car.type;
+					c->car.data.str = v_init();
+					v_copy(c->car.data.str, o->car.data.str);
+					c->mark = o->mark;
+
+					break;
+				default:
+					printf("PARSE-ERROR: Unknown expression when parsing special forms. Aborting.\n");
+					abort();
+
+					break;
+			}
+
+			if(option == 'I')
+			{
+				if(o->cdr)
+				{
+					c->cdr = malloc(sizeof(Expr));
+					c = c->cdr;
+				}
+
+				o = o->cdr;
+			}
+			else if(option == 'X')
+			{
+				break;
+			}
+		}
+	}
+
+	return final;
+}
+
 Expr *parse(struct safe_string clean_input, struct TokenBuffer tokens)
 {
 	Expr *origin = malloc(sizeof(Expr));
@@ -306,8 +431,9 @@ Expr *parse(struct safe_string clean_input, struct TokenBuffer tokens)
 			e_curr->car.type = Lst;
 			e_curr->car.data.lst = NULL;
 			e_curr->cdr = NULL;
+			e_curr->mark = 0;
 
-			es_append(&trace, e_curr);
+			es_push(&trace, e_curr);
 
 			if(len_til_close(tokens, t))
 			{
@@ -322,6 +448,8 @@ Expr *parse(struct safe_string clean_input, struct TokenBuffer tokens)
 		}
 		else 
 		{
+			e_curr->mark = 0;
+
 			switch(tokens.tokens[t]) 
 			{
 				case O_Paren:

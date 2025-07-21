@@ -4,18 +4,11 @@
 
 #include "types.h"
 
-struct ExprStack
-{
-    int len;
-    int max_len;
-    Expr *stack[MAX_EXPR_STACK_SIZE];
-};
-
 void es_push(struct ExprStack *es, Expr *e)
 {
-    if(es->len >= es->max_len)
+    if(es->len >= MAX_EXPR_STACK_SIZE)
     {
-        printf("ERROR: Evaluator has exceeded maximum depth");
+        printf("ERROR: Stack has exceeded maximum depth");
         abort();
     }
 
@@ -69,6 +62,8 @@ void copy_idr(Expr *orig, Expr *copy, struct stackPairs *stacks, struct replacem
 
 void copy_single_expr(Expr *orig, Expr *copy, struct stackPairs *stacks, struct replacements replacements)
 {
+	copy->mark = 0;
+
 	switch (orig->car.type) {
 		case Num:
 			copy->car.type = Num;
@@ -220,14 +215,16 @@ Expr *new_copy(Expr *e, struct replacements replacements, int CDR_OPTION)
 	stack_pair.copy.len = 0;
 	stack_pair.orig.len = 0;
 
-	stack_pair.orig.max_len = MAX_EXPR_STACK_SIZE;
-	stack_pair.copy.max_len = MAX_EXPR_STACK_SIZE;
-
 	Expr *final_copy = malloc(sizeof(Expr));
 	final_copy->cdr = NULL;
 
 	Expr *orig = e;
 	Expr *copy = final_copy;
+
+	if(!e)
+	{
+		return NULL;
+	}
 
 	if(CDR_OPTION == EXCLUDE_CDR)
 	{
@@ -341,7 +338,6 @@ void new_destruct(Expr *expr, int CDR_OPTION)
 
 	struct ExprStack trace;
 	trace.len = 0;
-	trace.max_len = MAX_EXPR_STACK_SIZE;
 
 	if(CDR_OPTION == EXCLUDE_CDR)
 	{

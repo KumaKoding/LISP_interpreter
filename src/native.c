@@ -3,8 +3,7 @@
 #include <string.h>
 
 #include "eval.h"
-#include "environment.h"
-#include "types.h"
+#include "callstack.h"
 
 #define IS_NATIVE(function, target) vec_cmp_str(function.key, target, strlen(target))
 
@@ -97,8 +96,9 @@ Expr *run_native(Native function)
 	}
 }
 
-Expr *handle_native(struct StackFrame frame)
+Expr *handle_native(struct CallStack *cs)
 {
+	struct StackFrame frame = cs->stack[cs->len - 1];
 	Native *function = frame.fn->car.data.nat;
 
 	if(function->n_args < function->n_filled + frame.params_evaluated)
@@ -123,7 +123,7 @@ Expr *handle_native(struct StackFrame frame)
 	}
 }
 
-void add_native(char *key, int n_args, Environment *env)
+void add_native(char *key, int n_args, struct CallStack *cs)
 {
 	Expr *nat = malloc(sizeof(Expr));
 	nat->car.type = Nat;
@@ -137,21 +137,22 @@ void add_native(char *key, int n_args, Environment *env)
 	nat->car.data.nat->n_filled = 0;
 	nat->car.data.nat->params = malloc(sizeof(Expr*) * n_args);
 
-	map_push(&env->env[env->depth], init_map_pair(nat->car.data.nat->key, nat));
+	map_push(cs->stack[0].local_references, init_map_pair(nat->car.data.nat->key, nat));
 }
 
-void init_natives(Environment *env)
+void init_natives(struct CallStack *cs)
 {
-	add_native("display", 1, env);
-	add_native("+", 2, env);
-	add_native("-", 2, env);
-	add_native("*", 2, env);
-	add_native("/", 2, env);
-	add_native("eq", 2, env);
-	add_native("cons", 2, env);
-	add_native("car", 1, env);
-	add_native("cdr", 1, env);
-	add_native("is-nil?", 1, env);
+	add_native("display", 1, cs);
+	add_native("+", 2, cs);
+	add_native("-", 2, cs);
+	add_native("*", 2, cs);
+	add_native("/", 2, cs);
+	add_native("eq", 2, cs);
+	add_native("cons", 2, cs);
+	add_native("car", 1, cs);
+	add_native("cdr", 1, cs);
+	add_native("is-nil?", 1, cs);
 }
+
 #undef IS_NATIVE
 

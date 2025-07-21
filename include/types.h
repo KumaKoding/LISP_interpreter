@@ -73,12 +73,18 @@ struct ExprData
     } data;
 };
 
+struct ExprStack
+{
+    int len;
+    Expr *stack[MAX_EXPR_STACK_SIZE];
+};
+
 struct Expr
 {
     ExprData car;
     Expr *cdr;
 
-	int ref;
+	int mark;
 };
 
 struct Lambda
@@ -132,6 +138,9 @@ Pair *pt_find(PairTable *pt, Vector *key);
 void pt_delete(PairTable *pt, Vector *key);
 void pt_print(PairTable *pt);
 void pt_destruct(PairTable *pt);
+
+void es_push(struct ExprStack *es, Expr *e);
+Expr *es_pop(struct ExprStack *es);
 
 void e_print(Expr* expr);
 Expr *e_copy(Expr *expr, Vector *replace_keys[], Expr *replace_expr[], int n_replace, int CDR_OPTION);
