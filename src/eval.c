@@ -5,25 +5,26 @@
 
 #include "eval.h"
 #include "callstack.h"
-#include "types.h"
+#include "expr.h"
+#include "garbage.h"
 
-void shadow_variables(Vector *v, Expr *e, LocalMap *lm)
+void shadow_variables(Vector *v, Expr *e, LocalMap *lm, struct Collector *gc)
 {
 	for(int i = 0; i < lm->len; i++)
 	{
 		if(vec_cmp_vec(v, lm->map[i].v))
 		{
-			lm->map[i].v = v;
-			lm->map[i].e = e;
+			// memory leak
+			lm->map[i] = init_map_pair(v, e, gc);
 
 			return;
 		}
 	}
 
-	map_push(lm, init_map_pair(v, e));
+	map_push(lm, init_map_pair(v, e, gc));
 }
 
-Expr *evaluate_frame(struct StackFrame f_curr, struct CallStack *cs)
+Expr *evaluate_frame(struct StackFrame f_curr, struct CallStack *cs, struct Collector *gc)
 {
 	Expr *return_value = NULL;
 	cs->stack[cs->len - 1].return_addr = NULL;
@@ -44,18 +45,18 @@ Expr *evaluate_frame(struct StackFrame f_curr, struct CallStack *cs)
 
 				for(int i = 0; i < f_curr.local_references->len; i++)
 				{
-					map_push(cs->stack[cs->len - 1].local_references, f_curr.local_references->map[i]);
+					map_push(cs->stack[cs->len - 1].local_references, init_map_pair(f_curr.local_references->map[i].v, f_curr.local_references->map[i].e, gc));
 				}
 
 				for(int i = 0; i < f_curr.fn->car.data.lam->n_args; i++)
 				{
 					if(i < f_curr.fn->car.data.lam->n_filled)
 					{
-						shadow_variables(f_curr.fn->car.data.lam->p_keys[i], f_curr.fn->car.data.lam->params[i], cs->stack[cs->len - 1].local_references);
+						shadow_variables(f_curr.fn->car.data.lam->p_keys[i], f_curr.fn->car.data.lam->params[i], cs->stack[cs->len - 1].local_references, gc);
 					}
 					else 
 					{
-						shadow_variables(f_curr.fn->car.data.lam->p_keys[i], f_curr.params[i - f_curr.fn->car.data.lam->n_filled], cs->stack[cs->len - 1].local_references);
+						shadow_variables(f_curr.fn->car.data.lam->p_keys[i], f_curr.params[i - f_curr.fn->car.data.lam->n_filled], cs->stack[cs->len - 1].local_references, gc);
 					}
 				}
 			}
@@ -80,7 +81,7 @@ Expr *evaluate_frame(struct StackFrame f_curr, struct CallStack *cs)
 
 			if(f_curr.fn->car.data.nat->n_args == f_curr.fn->car.data.nat->n_filled)
 			{
-				return_value = run_native(*f_curr.fn->car.data.nat);
+				return_value = run_native(*f_curr.fn->car.data.nat, gc);
 			}
 			else
 			{
@@ -105,8 +106,9 @@ Expr *evaluate_frame(struct StackFrame f_curr, struct CallStack *cs)
 			return_value = malloc(sizeof(Expr));
 			return_value->car.type = Nil;
 			return_value->cdr = NULL;
+			return_value->mark = 0;
 
-			map_push(cs->stack[cs->len - 1].local_references, init_map_pair(f_curr.fn->car.data.str, f_curr.params[0]));
+			map_push(cs->stack[cs->len - 1].local_references, init_map_pair(f_curr.fn->car.data.str, f_curr.params[0], gc));
 
 			break;
 		default:
@@ -130,22 +132,23 @@ void print_cs(struct CallStack cs)
 	for(int i = 0; i < cs.len; i++)
 	{
 		printf("%d (%d)", cs.len - i - 1, cs.stack[cs.len - i - 1].function_evaluated);
-		e_print(new_copy(cs.stack[cs.len - i - 1].fn, NO_REPLACE, EXCLUDE_CDR));
+		e_print(cs.stack[cs.len - i - 1].fn);
 		printf("\t%d / %d params: ", cs.stack[cs.len - i - 1].params_evaluated, cs.stack[cs.len - i - 1].params_available);
 
 		for(int p = 0; p < cs.stack[cs.len - i - 1].params_available; p++)
 		{
-			e_print(new_copy(cs.stack[cs.len - i - 1].params[p], NO_REPLACE, EXCLUDE_CDR));
+			e_print(cs.stack[cs.len - i - 1].params[p]);
 			printf(" ");
 		}
 
 		printf("\t{ ");
+		printf("\nL = %d\n", cs.stack[cs.len - i -1].local_references->len);
 
 		for(int l = 0; l < cs.stack[cs.len - i - 1].local_references->len; l++)
 		{
 			v_print(cs.stack[cs.len - i - 1].local_references->map[l].v);
 			printf(" => ");
-			e_print(new_copy(cs.stack[cs.len - i - 1].local_references->map[l].e, NO_REPLACE, EXCLUDE_CDR));
+			e_print(cs.stack[cs.len - i - 1].local_references->map[l].e);
 
 			if(l + 1 < cs.stack[cs.len - i - 1].local_references->len)
 			{
@@ -157,7 +160,7 @@ void print_cs(struct CallStack cs)
 	}
 }
 
-Expr* eval(Expr *e, struct CallStack *cs)
+Expr* eval(Expr *e, struct CallStack *cs, struct Collector *gc)
 {
 	Expr *return_value = NULL;
 
@@ -177,15 +180,13 @@ Expr* eval(Expr *e, struct CallStack *cs)
 		add_fn(e, &return_value, cs);
 	}
 
-	int cycles = 0;
-
 	while(cs->len > 1)
 	{
-		cycles++;
+		struct StackFrame *f_curr = &cs->stack[cs->len - 1];
+
 		// print_cs(*cs);
 		// printf("\n");
 
-		struct StackFrame *f_curr = &cs->stack[cs->len - 1];
 
 		Expr *e_curr = NULL;
 		Expr **return_addr = NULL;
@@ -206,7 +207,7 @@ Expr* eval(Expr *e, struct CallStack *cs)
 		{
 			return_addr = f_curr->return_addr;
 
-			Expr *frame_output = evaluate_frame(*f_curr, cs);
+			Expr *frame_output = evaluate_frame(*f_curr, cs, gc);
 
 			if(frame_output)
 			{
@@ -223,6 +224,8 @@ Expr* eval(Expr *e, struct CallStack *cs)
 					Expr *nil = malloc(sizeof(Expr));
 					nil->car.type = Nil;
 					nil->cdr = NULL;
+					nil->mark = 0;
+					gc_push(gc, nil);
 
 					*return_addr = nil;
 				}
@@ -237,7 +240,8 @@ Expr* eval(Expr *e, struct CallStack *cs)
 
 				if(search)
 				{
-					*return_addr = new_copy(search, NO_REPLACE, EXCLUDE_CDR);
+					*return_addr = new_copy(search, EXCLUDE_CDR, gc);
+					gc_push(gc, *return_addr);
 				}
 				else 
 				{
@@ -253,7 +257,8 @@ Expr* eval(Expr *e, struct CallStack *cs)
 				{
 					for(int i = 0; i < cs->stack[cs->len - 1].local_references->len; i++)
 					{
-						map_push(cs->stack[cs->len - 2].local_references, cs->stack[cs->len - 1].local_references->map[i]);
+						map_push(cs->stack[cs->len - 2].local_references, init_map_pair(cs->stack[cs->len - 1].local_references->map[i].v, cs->stack[cs->len - 1].local_references->map[i].e, gc));
+
 					}
 				}
 
@@ -261,8 +266,6 @@ Expr* eval(Expr *e, struct CallStack *cs)
 			}
 		}
 	}
-
-	printf("CYCLES = %d\n", cycles);
 
 	return return_value;
 }

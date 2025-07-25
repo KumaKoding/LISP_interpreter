@@ -3,53 +3,8 @@
 #include <string.h>
 
 #include "parse.h"
+#include "expr.h"
 
-// #include "eval.h"
-// #include "callstack.h"
-
-// Expr *handle_lambda(struct CallStack *cs)
-// {
-// 	struct StackFrame frame = cs->stack[cs->len - 1];
-//
-// 	Lambda *function = frame.fn->car.data.lam;
-//
-// 	if(function->n_args == frame.params_evaluated + function->n_filled)
-// 	{
-// 		for(int i = 0; i < function->n_args; i++)
-// 		{
-// 			if(i < function->n_filled)
-// 			{
-// 				map_push(frame.local_references, init_map_pair(function->p_keys[i], function->params[i]));
-// 			}
-// 			else 
-// 			{
-// 				map_push(frame.local_references, init_map_pair(function->p_keys[i], frame.params[i - function->n_filled]));
-// 			}
-// 		}
-//
-// 		Expr *instructions = new_copy(function->instructions, NO_REPLACE, EXCLUDE_CDR);
-//
-// 		add_fn(new_copy(function->instructions, NO_REPLACE, EXCLUDE_CDR), frame.return_addr, cs);
-//
-// 		return instructions;
-// 	}
-// 	else if(function->n_args > frame.params_evaluated)
-// 	{
-// 		for(int i = 0; i < frame.params_evaluated; i++)
-// 		{
-// 			function->params[function->n_filled] = frame.params[i];
-// 			function->n_filled++;
-// 		}
-//
-// 		return frame.fn;
-// 	}
-// 	else 
-// 	{
-// 		printf("ERROR: Too many parameters applied to lambda function. Aborting.");
-// 		abort();
-// 	}
-// }
-//
 int identify_lambda(Expr *e)
 {
 	if(!e->car.data.lst)
@@ -81,6 +36,7 @@ int identify_lambda(Expr *e)
 
 	if(!inner->cdr->cdr)
 	{
+//
 		return 0;
 	}
 

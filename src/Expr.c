@@ -1,8 +1,9 @@
-#include <complex.h>
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "types.h"
+#include "expr.h"
+#include "callstack.h"
+#include "garbage.h"
 
 void es_push(struct ExprStack *es, Expr *e)
 {
@@ -60,9 +61,10 @@ void copy_idr(Expr *orig, Expr *copy, struct stackPairs *stacks, struct replacem
 	}
 }
 
-void copy_single_expr(Expr *orig, Expr *copy, struct stackPairs *stacks, struct replacements replacements)
+void copy_single_expr(Expr *orig, Expr *copy, struct stackPairs *stacks, struct Collector *gc)
 {
 	copy->mark = 0;
+	gc_push(gc, copy);
 
 	switch (orig->car.type) {
 		case Num:
@@ -79,26 +81,10 @@ void copy_single_expr(Expr *orig, Expr *copy, struct stackPairs *stacks, struct 
 			break;
 		case Idr:
 		{
-			int found_match = 0;
+			copy->car.type = Idr;
+			copy->car.data.str = v_init();
 
-			for (int i = 0; i < replacements.n_replace; i++) 
-			{
-				if(vec_cmp_vec(orig->car.data.str, replacements.replace_keys[i]))
-				{
-					found_match = 1;
-
-					es_push(&stacks->orig, replacements.replace_exprs[i]);
-					es_push(&stacks->copy, copy);
-				}
-			}
-
-			if(!found_match)
-			{
-				copy->car.type = Idr;
-				copy->car.data.str = v_init();
-
-				v_copy(copy->car.data.str, orig->car.data.str);
-			}
+			v_copy(copy->car.data.str, orig->car.data.str);
 
 			break;
 		}
@@ -208,7 +194,7 @@ void copy_single_expr(Expr *orig, Expr *copy, struct stackPairs *stacks, struct 
 	}
 }
 
-Expr *new_copy(Expr *e, struct replacements replacements, int CDR_OPTION)
+Expr *new_copy(Expr *e, int CDR_OPTION, struct Collector *gc)
 {
 	struct stackPairs stack_pair;
 
@@ -228,7 +214,7 @@ Expr *new_copy(Expr *e, struct replacements replacements, int CDR_OPTION)
 
 	if(CDR_OPTION == EXCLUDE_CDR)
 	{
-		copy_single_expr(orig, copy, &stack_pair, replacements);
+		copy_single_expr(orig, copy, &stack_pair, gc);
 	}
 	else if(CDR_OPTION == INCLUDE_CDR)
 	{
@@ -250,7 +236,7 @@ Expr *new_copy(Expr *e, struct replacements replacements, int CDR_OPTION)
 
 		while(orig != NULL)
 		{
-			copy_single_expr(orig, copy, &stack_pair, replacements);
+			copy_single_expr(orig, copy, &stack_pair, gc);
 
 			if(orig->cdr != NULL)
 			{

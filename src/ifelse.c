@@ -2,26 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "parse.h"
-#include "types.h"
-
-// #include "eval.h"
-// #include "callstack.h"
-//
-// Expr *handle_ifelse(struct CallStack *cs)
-// {
-// 	struct StackFrame frame = cs->stack[cs->len - 1];
-// 	IfElse *function = frame.fn->car.data.ifE;
-//
-// 	if(frame.params[0]->car.type != Fls && frame.params[0]->car.type != Nil)
-// 	{
-// 		return function->branch_true;
-// 	}
-// 	else 
-// 	{
-// 		return function->branch_false;
-// 	}
-// }
+#include "expr.h"
 
 void create_ifelse(Expr *copy, Expr *orig)
 {

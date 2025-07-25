@@ -1,7 +1,7 @@
 #ifndef LEXER_H
 #define LEXER_H
 
-#include "input.h"
+struct safe_string;
 
 typedef enum 
 {

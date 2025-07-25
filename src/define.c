@@ -2,23 +2,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "expr.h"
 #include "parse.h"
-
-// #include "eval.h"
-// #include "callstack.h"
-//
-// Expr *handle_define(struct CallStack *cs)
-// {
-// 	struct StackFrame frame = cs->stack[cs->len - 1];
-// 	// put the variable into the previous stack frame
-// 	map_push(cs->stack[cs->len - 2].local_references, init_map_pair(frame.fn->car.data.str, frame.params[0]));
-//
-// 	Expr *nil = malloc(sizeof(Expr));
-// 	nil->car.type = Nil;
-// 	nil->cdr = NULL;
-//
-// 	return nil;
-// }
 
 int identify_define(Expr *e)
 {

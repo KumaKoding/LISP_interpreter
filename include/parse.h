@@ -1,9 +1,9 @@
 #ifndef PARSE_H
 #define PARSE_H
 
-#include "input.h"
-#include "types.h"
-#include "lexer.h"
+typedef struct Expr Expr;
+struct TokenBuffer;
+struct safe_string;
 
 Expr *parse(struct safe_string clean_input, struct TokenBuffer tokens);
 Expr *parse_special_forms(Expr *e);

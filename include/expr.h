@@ -4,7 +4,6 @@
 #define VECTOR_INIT_SIZE 8
 #define PTABLE_INIT_SIZE 16
 
-#define MAX_CALL_STACK_SIZE 4092
 #define MAX_EXPR_STACK_SIZE 256
 
 #define INCLUDE_CDR 1
@@ -19,6 +18,8 @@ typedef struct Lambda Lambda;
 typedef struct IfElse IfElse;
 typedef struct Native Native;
 typedef struct Define Define;
+
+struct Collector;
 
 struct Vector
 {
@@ -117,9 +118,6 @@ struct replacements
 	int n_replace;
 };
 
-#define NO_REPLACE (struct replacements){.replace_keys = NULL, .replace_exprs = NULL, .n_replace = 0}
-#define REPLACE(keys, exprs, n) (struct replacements){.replace_keys = keys, .replace_exprs = exprs, .n_replace = n}
-
 Vector *v_init();
 void v_copy(Vector *targ, Vector *orig);
 void v_destruct(Vector *v);
@@ -131,21 +129,11 @@ void v_println(Vector *v);
 int vec_cmp_vec(Vector *v1, Vector *v2);
 int vec_cmp_str(Vector *v, char *str, int len);
 
-PairTable *pt_init();
-int pt_hash(Vector *key, int table_size);
-void pt_insert(PairTable *pt, Vector *key, Expr *instruction);
-Pair *pt_find(PairTable *pt, Vector *key);
-void pt_delete(PairTable *pt, Vector *key);
-void pt_print(PairTable *pt);
-void pt_destruct(PairTable *pt);
-
 void es_push(struct ExprStack *es, Expr *e);
 Expr *es_pop(struct ExprStack *es);
 
 void e_print(Expr* expr);
-Expr *e_copy(Expr *expr, Vector *replace_keys[], Expr *replace_expr[], int n_replace, int CDR_OPTION);
-void e_destruct(Expr *expr, int CDR_OPTION);
-Expr *new_copy(Expr *e, struct replacements replacements, int CDR_OPTION);
+Expr *new_copy(Expr *e, int CDR_OPTION, struct Collector *gc);
 void new_destruct(Expr *expr, int CDR_OPTION);
 
 #endif

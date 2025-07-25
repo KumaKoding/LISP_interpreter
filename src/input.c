@@ -36,6 +36,7 @@ int is_in(char c, const char * const set)
 int count_duplicate_formatting(char *raw, int len, const char *const formatting)
 {
 	int subtract_len = 0;
+
 	int c = 0;
 
 	while(c < len)

@@ -5,7 +5,7 @@
 #include "parse.h"
 #include "input.h"
 #include "lexer.h"
-#include "types.h"
+#include "expr.h"
 
 // struct ExprStack
 // {
@@ -311,6 +311,8 @@ Expr *parse_special_forms(Expr *e)
 
 		while(o)
 		{
+			c->mark = o->mark;
+
 			switch (o->car.type)
 			{
 				case Lst:
@@ -362,21 +364,18 @@ Expr *parse_special_forms(Expr *e)
 				case Num:
 					c->car.type = o->car.type;
 					c->car.data.num = o->car.data.num;
-					c->mark = o->mark;
 
 					break;
 				case Str:
 					c->car.type = o->car.type;
 					c->car.data.str = v_init();
 					v_copy(c->car.data.str, o->car.data.str);
-					c->mark = o->mark;
 
 					break;
 				case Idr:
 					c->car.type = o->car.type;
 					c->car.data.str = v_init();
 					v_copy(c->car.data.str, o->car.data.str);
-					c->mark = o->mark;
 
 					break;
 				default:

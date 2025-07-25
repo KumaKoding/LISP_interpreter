@@ -2,6 +2,8 @@
 #include <stdlib.h>
 
 #include "callstack.h"
+#include "expr.h"
+#include "garbage.h"
 
 int count_exprs(Expr *e)
 {
@@ -76,8 +78,6 @@ LocalMap *init_map()
 
 Expr *map_search(Vector *key, LocalMap lm)
 {
-	Expr *search = NULL;
-
 	for(int i = 0; i < lm.len; i++)
 	{
 		if(vec_cmp_vec(key, lm.map[i].v))
@@ -86,17 +86,17 @@ Expr *map_search(Vector *key, LocalMap lm)
 		}
 	}
 
-	return search;
+	return NULL;
 }
 
-MapPair init_map_pair(Vector *v, Expr *e)
+MapPair init_map_pair(Vector *v, Expr *e, struct Collector *gc)
 {
 	MapPair mp;
 
 	mp.v = v_init();
 	v_copy(mp.v, v);
 
-	mp.e = new_copy(e, NO_REPLACE, EXCLUDE_CDR);
+	mp.e = new_copy(e, EXCLUDE_CDR, gc);
 
 	return mp;
 }

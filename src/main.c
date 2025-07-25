@@ -3,7 +3,8 @@
 #include <string.h>
 
 #include "callstack.h"
-#include "types.h"
+#include "garbage.h"
+#include "expr.h"
 #include "input.h"
 #include "lexer.h"
 #include "parse.h"
@@ -34,59 +35,28 @@ int main(int argc, const char *argv[])
     char *buf = malloc(size);
     fread(buf, sizeof(char), size, f);
 
-	printf("%s\n\n", buf);
-
 	struct safe_string clean_input = cleanse_formatting(buf, size);
     struct TokenBuffer t_buf = lex(clean_input);
-
-	printf("%s\n\n", clean_input.data);
-
-	for(int i = 0; i < t_buf.len; i++)
-	{
-		print_token(t_buf.tokens[i]);
-	}
-
-	printf("\n\n");
-
 	clean_whitespace_for_parse(&t_buf, &clean_input);
 
-	for(int i = 0; i < t_buf.len; i++)
-	{
-		print_token(t_buf.tokens[i]);
-	}
-
-	printf("\n\n");
-
-
-	for(int i = 0; i < clean_input.len; i++)
-	{
-		printf("%c", clean_input.data[i]);
-	}
-
-	printf("\n\n");
-
 	Expr *first_pass = parse(clean_input, t_buf);
-
-	e_print(first_pass);
-	printf("\n\n");
-
 	Expr *second_pass = parse_special_forms(first_pass);
-
-	e_print(second_pass);
-	printf("\n\n");
 
 	struct CallStack cs;
 	cs.len = 1;
 	cs.stack[0] = (struct StackFrame){0};
 	cs.stack[0].local_references = init_map();
-	init_natives(&cs);
+
+	struct Collector gc = init_gc(&cs);
+
+	init_natives(&cs, &gc);
 
 	Expr *temp = second_pass->cdr;
 	second_pass->cdr = NULL;
 
 	while(second_pass)
 	{
-		Expr *output = eval(second_pass, &cs);
+		Expr *output = eval(second_pass, &cs, &gc);
 
 		e_print(output);
 		printf("\n\n");
