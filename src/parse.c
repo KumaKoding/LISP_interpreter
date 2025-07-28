@@ -311,8 +311,6 @@ Expr *parse_special_forms(Expr *e)
 
 		while(o)
 		{
-			c->mark = o->mark;
-
 			switch (o->car.type)
 			{
 				case Lst:
@@ -353,7 +351,6 @@ Expr *parse_special_forms(Expr *e)
 						{
 							c->car.data.lst = malloc(sizeof(Expr));
 						}
-						c->mark = o->mark;
 
 						os_push(&options, 'I');
 						es_push(&orig, o->car.data.lst);
@@ -430,7 +427,6 @@ Expr *parse(struct safe_string clean_input, struct TokenBuffer tokens)
 			e_curr->car.type = Lst;
 			e_curr->car.data.lst = NULL;
 			e_curr->cdr = NULL;
-			e_curr->mark = 0;
 
 			es_push(&trace, e_curr);
 
@@ -447,8 +443,6 @@ Expr *parse(struct safe_string clean_input, struct TokenBuffer tokens)
 		}
 		else 
 		{
-			e_curr->mark = 0;
-
 			switch(tokens.tokens[t]) 
 			{
 				case O_Paren:

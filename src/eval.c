@@ -45,6 +45,7 @@ Expr *evaluate_frame(struct StackFrame f_curr, struct CallStack *cs, struct Coll
 
 				for(int i = 0; i < f_curr.local_references->len; i++)
 				{
+					// rewriting memory in the same place probably
 					map_push(cs->stack[cs->len - 1].local_references, init_map_pair(f_curr.local_references->map[i].v, f_curr.local_references->map[i].e, gc));
 				}
 
@@ -58,6 +59,7 @@ Expr *evaluate_frame(struct StackFrame f_curr, struct CallStack *cs, struct Coll
 					{
 						shadow_variables(f_curr.fn->car.data.lam->p_keys[i], f_curr.params[i - f_curr.fn->car.data.lam->n_filled], cs->stack[cs->len - 1].local_references, gc);
 					}
+					// for(int sf = 0; sf < cs->len; sf++) { if(cs->stack[sf].local_references->len > 30) { printf("HERE\n"); } }
 				}
 			}
 			else 
@@ -106,7 +108,6 @@ Expr *evaluate_frame(struct StackFrame f_curr, struct CallStack *cs, struct Coll
 			return_value = malloc(sizeof(Expr));
 			return_value->car.type = Nil;
 			return_value->cdr = NULL;
-			return_value->mark = 0;
 
 			map_push(cs->stack[cs->len - 1].local_references, init_map_pair(f_curr.fn->car.data.str, f_curr.params[0], gc));
 
@@ -142,7 +143,7 @@ void print_cs(struct CallStack cs)
 		}
 
 		printf("\t{ ");
-		printf("\nL = %d\n", cs.stack[cs.len - i -1].local_references->len);
+		printf("(L = %d) ", cs.stack[cs.len - i -1].local_references->len);
 
 		for(int l = 0; l < cs.stack[cs.len - i - 1].local_references->len; l++)
 		{
@@ -224,7 +225,6 @@ Expr* eval(Expr *e, struct CallStack *cs, struct Collector *gc)
 					Expr *nil = malloc(sizeof(Expr));
 					nil->car.type = Nil;
 					nil->cdr = NULL;
-					nil->mark = 0;
 					gc_push(gc, nil);
 
 					*return_addr = nil;
@@ -241,7 +241,6 @@ Expr* eval(Expr *e, struct CallStack *cs, struct Collector *gc)
 				if(search)
 				{
 					*return_addr = new_copy(search, EXCLUDE_CDR, gc);
-					gc_push(gc, *return_addr);
 				}
 				else 
 				{
@@ -255,6 +254,7 @@ Expr* eval(Expr *e, struct CallStack *cs, struct Collector *gc)
 			{
 				if(e_curr->car.type == Lam) // is closure
 				{
+
 					for(int i = 0; i < cs->stack[cs->len - 1].local_references->len; i++)
 					{
 						map_push(cs->stack[cs->len - 2].local_references, init_map_pair(cs->stack[cs->len - 1].local_references->map[i].v, cs->stack[cs->len - 1].local_references->map[i].e, gc));
@@ -266,6 +266,8 @@ Expr* eval(Expr *e, struct CallStack *cs, struct Collector *gc)
 			}
 		}
 	}
+
+	print_cs(*cs);
 
 	return return_value;
 }

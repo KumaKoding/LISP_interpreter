@@ -61,6 +61,9 @@ int main(int argc, const char *argv[])
 		e_print(output);
 		printf("\n\n");
 
+		mark(&gc);
+		sweep(&gc);
+
 		second_pass = temp;
 
 		if(temp)

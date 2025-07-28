@@ -37,33 +37,8 @@ struct stackPairs
 	struct ExprStack copy;
 };
 
-void copy_idr(Expr *orig, Expr *copy, struct stackPairs *stacks, struct replacements replacements) 
-{
-	int found_match = 0;
-
-	for(int i = 0; i < replacements.n_replace; i++)
-	{
-		if(vec_cmp_vec(orig->car.data.str, copy->car.data.str))
-		{
-			found_match = 1;
-
-			es_push(&stacks->orig, replacements.replace_exprs[i]);
-			es_push(&stacks->copy, copy);
-		}
-	}
-
-	if(!found_match)
-	{
-		copy->car.type = Idr;
-		copy->car.data.str = v_init();
-
-		v_copy(copy->car.data.str, orig->car.data.str);
-	}
-}
-
 void copy_single_expr(Expr *orig, Expr *copy, struct stackPairs *stacks, struct Collector *gc)
 {
-	copy->mark = 0;
 	gc_push(gc, copy);
 
 	switch (orig->car.type) {

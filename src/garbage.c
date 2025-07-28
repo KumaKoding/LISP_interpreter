@@ -6,6 +6,8 @@
 #include "expr.h"
 #include "callstack.h"
 
+#define INITIAL_EXPR_VECTOR_SIZE 32
+
 struct ExprVector init_e_vec()
 {
 	struct ExprVector e_vec;
@@ -32,9 +34,9 @@ void e_vec_push(struct ExprVector *e_vec, Expr *e)
 {
 	if(e_vec->n_exprs == e_vec->max)
 	{
-		e_vec->exprs = realloc(e_vec->exprs, e_vec->max * 2);
+		e_vec->exprs = realloc(e_vec->exprs, sizeof(Expr *) * e_vec->max * 2);
 		e_vec->max *= 2;
-	}
+	}	
 
 	e_vec->exprs[e_vec->n_exprs] = e;
 	e_vec->n_exprs++;
@@ -43,6 +45,7 @@ void e_vec_push(struct ExprVector *e_vec, Expr *e)
 void gc_push(struct Collector *gc, Expr *e)
 {
 	e_vec_push(&gc->e_vec, e);
+	e->mark = 0;
 	gc->allocs++;
 }
 
@@ -53,49 +56,52 @@ void mark_root(Expr *root)
 	trace.len = 0;
 	es_push(&trace, root);
 
-	while(root != NULL)
+	while(trace.len > 0)
 	{
 		Expr *e_curr = es_pop(&trace);
 
-		e_curr->mark = 1;
-
-		switch (e_curr->car.type)
+		while(e_curr != NULL)
 		{
-			case Lst:
-				if(e_curr->car.data.lst)
-				{
-					es_push(&trace, e_curr->car.data.lst);
-				}
+			e_curr->mark = 1;
 
-				break;
-			case Lam:
-				for(int p = 0; p < e_curr->car.data.lam->n_filled; p++)
-				{
-					es_push(&trace, e_curr->car.data.lam->params[p]);
-				}
+			switch (e_curr->car.type)
+			{
+				case Lst:
+					if(e_curr->car.data.lst)
+					{
+						es_push(&trace, e_curr->car.data.lst);
+					}
 
-				es_push(&trace, e_curr->car.data.lam->instructions);
+					break;
+				case Lam:
+					for(int p = 0; p < e_curr->car.data.lam->n_filled; p++)
+					{
+						es_push(&trace, e_curr->car.data.lam->params[p]);
+					}
 
-				break;
-			case Nat:
-				for(int p = 0; p < e_curr->car.data.nat->n_filled; p++)
-				{
-					es_push(&trace, e_curr->car.data.nat->params[p]);
-				}
+					es_push(&trace, e_curr->car.data.lam->instructions);
 
-				break;
-			case IfE:
-				es_push(&trace, e_curr->car.data.ifE->branch_true);
-				es_push(&trace, e_curr->car.data.ifE->branch_false);
+					break;
+				case Nat:
+					for(int p = 0; p < e_curr->car.data.nat->n_filled; p++)
+					{
+						es_push(&trace, e_curr->car.data.nat->params[p]);
+					}
 
-				break;
-			case Def:
-				break;
-			default:
-				break;
+					break;
+				case IfE:
+					es_push(&trace, e_curr->car.data.ifE->branch_true);
+					es_push(&trace, e_curr->car.data.ifE->branch_false);
+
+					break;
+				case Def:
+					break;
+				default:
+					break;
+			}
+
+			e_curr = e_curr->cdr;
 		}
-
-		e_curr = e_curr->cdr;
 	}
 }
 
@@ -103,7 +109,10 @@ void mark(struct Collector *gc)
 {
 	for(int i = 0; i < gc->roots->len; i++)
 	{
-		mark_root(gc->roots->stack[i].fn);
+		if(gc->roots->stack[i].fn)
+		{
+			mark_root(gc->roots->stack[i].fn);
+		}
 
 		// need to integrate variable map into callstack
 		for(int p = 0; p < gc->roots->stack[i].params_available; p++)
