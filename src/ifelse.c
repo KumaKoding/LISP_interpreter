@@ -3,6 +3,14 @@
 #include <string.h>
 
 #include "expr.h"
+#include "my_malloc.h"
+
+#if TESTING
+	#define malloc(X) check_malloc(X, __FILE__, __LINE__, __FUNCTION__)
+	#define realloc(X, Y) check_realloc(X, Y, __FILE__, __LINE__, __FUNCTION__)
+	#define free(X) check_free(X, __FILE__, __LINE__, __FUNCTION__)
+#endif
+
 
 void create_ifelse(Expr *copy, Expr *orig)
 {

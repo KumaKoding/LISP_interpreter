@@ -9,6 +9,14 @@
 #include "lexer.h"
 #include "parse.h"
 #include "eval.h"
+#include "my_malloc.h"
+
+#if TESTING
+	#define malloc(X) check_malloc(X, __FILE__, __LINE__, __FUNCTION__)
+	#define realloc(X, Y) check_realloc(X, Y, __FILE__, __LINE__, __FUNCTION__)
+	#define free(X) check_free(X, __FILE__, __LINE__, __FUNCTION__)
+#endif
+
 
 int fsize(FILE *f)
 {
@@ -36,11 +44,18 @@ int main(int argc, const char *argv[])
     fread(buf, sizeof(char), size, f);
 
 	struct safe_string clean_input = cleanse_formatting(buf, size);
-    struct TokenBuffer t_buf = lex(clean_input);
+	struct TokenBuffer t_buf = lex(clean_input);
 	clean_whitespace_for_parse(&t_buf, &clean_input);
 
-	Expr *first_pass = parse(clean_input, t_buf);
-	Expr *second_pass = parse_special_forms(first_pass);
+	struct ExprVector *exprs = parse(clean_input, t_buf);
+
+	for(int i = 0; i < exprs->n_exprs; i++)
+	{
+		Expr *first_pass = exprs->exprs[i];
+		exprs->exprs[i] = parse_special_forms(exprs->exprs[i]);
+
+		new_destruct(first_pass, INCLUDE_CDR);
+	}
 
 	struct CallStack cs;
 	cs.len = 1;
@@ -51,33 +66,43 @@ int main(int argc, const char *argv[])
 
 	init_natives(&cs, &gc);
 
-	Expr *temp = second_pass->cdr;
-	second_pass->cdr = NULL;
-
-	while(second_pass)
+	for(int e = 0; e < exprs->n_exprs; e++)
 	{
-		Expr *output = eval(second_pass, &cs, &gc);
+		Expr *output = eval(exprs->exprs[e], &cs, &gc);
 
 		e_print(output);
-		printf("\n\n");
+		printf("\n");
 
 		mark(&gc);
 		sweep(&gc);
-
-		second_pass = temp;
-
-		if(temp)
-		{
-			temp = second_pass->cdr;
-			second_pass->cdr = NULL;
-		}
 	}
+
+	for(int i = 0; i < cs.stack[0].local_references->len; i++)
+	{
+		v_destruct(cs.stack[0].local_references->map[i].v);
+	}
+
+	free(cs.stack[0].local_references);
+
+	cs.len--;
+
+	mark(&gc);
+	sweep(&gc);
 
 	free(buf);
 	free(clean_input.data);
 	free(t_buf.tokens);
-	new_destruct(first_pass, INCLUDE_CDR);
-	new_destruct(second_pass, INCLUDE_CDR);
-	//
+
+	for(int e = 0; e < exprs->n_exprs; e++)
+	{
+		new_destruct(exprs->exprs[e], EXCLUDE_CDR);
+	}
+
+	free(exprs->exprs);
+	free(exprs);
+
+	free(gc.e_vec->exprs);
+	free(gc.e_vec);
+
     return 0;
 }

@@ -74,6 +74,13 @@ struct ExprData
     } data;
 };
 
+struct ExprVector
+{
+	Expr **exprs;
+	int n_exprs;
+	int max;
+};
+
 struct ExprStack
 {
     int len;
@@ -128,6 +135,9 @@ void v_print(Vector *v);
 void v_println(Vector *v);
 int vec_cmp_vec(Vector *v1, Vector *v2);
 int vec_cmp_str(Vector *v, char *str, int len);
+
+struct ExprVector *init_e_vec();
+void e_vec_push(struct ExprVector *e_vec, Expr *e);
 
 void es_push(struct ExprStack *es, Expr *e);
 Expr *es_pop(struct ExprStack *es);

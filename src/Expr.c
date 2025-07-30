@@ -4,6 +4,38 @@
 #include "expr.h"
 #include "callstack.h"
 #include "garbage.h"
+#include "my_malloc.h"
+
+#if TESTING
+	#define malloc(X) check_malloc(X, __FILE__, __LINE__, __FUNCTION__)
+	#define realloc(X, Y) check_realloc(X, Y, __FILE__, __LINE__, __FUNCTION__)
+	#define free(X) check_free(X, __FILE__, __LINE__, __FUNCTION__)
+#endif
+
+#define INITIAL_EXPR_VECTOR_SIZE 32
+
+struct ExprVector *init_e_vec()
+{
+	struct ExprVector *e_vec = malloc(sizeof(struct ExprVector));
+
+	e_vec->max = INITIAL_EXPR_VECTOR_SIZE;
+	e_vec->exprs = malloc(sizeof(Expr *) * INITIAL_EXPR_VECTOR_SIZE);
+	e_vec->n_exprs = 0;
+
+	return e_vec;
+}
+
+void e_vec_push(struct ExprVector *e_vec, Expr *e)
+{
+	if(e_vec->n_exprs == e_vec->max)
+	{
+		e_vec->exprs = realloc(e_vec->exprs, sizeof(Expr *) * e_vec->max * 2);
+		e_vec->max *= 2;
+	}	
+
+	e_vec->exprs[e_vec->n_exprs] = e;
+	e_vec->n_exprs++;
+}
 
 void es_push(struct ExprStack *es, Expr *e)
 {
@@ -229,6 +261,16 @@ Expr *new_copy(Expr *e, int CDR_OPTION, struct Collector *gc)
 
 void destroy_single_expr(Expr *e, struct ExprStack *trace)
 {
+	// e_print(e);
+	// if(e->car.type == Lst)
+	// {
+	// 	printf(" - %p [%p]\n", e, e->car.data.lst);
+	// }
+	// else 
+	// {
+	// 	printf(" - %p\n", e);
+	// }
+	//
 	switch(e->car.type)
 	{
 		case Num:
@@ -252,11 +294,15 @@ void destroy_single_expr(Expr *e, struct ExprStack *trace)
 
 			es_push(trace, e->car.data.lam->instructions);
 
+			free(e->car.data.lam->p_keys);
 			free(e->car.data.lam->params);
+			free(e->car.data.lam);
 			break;
 		case IfE:
 			es_push(trace, e->car.data.ifE->branch_true);
 			es_push(trace, e->car.data.ifE->branch_false);
+
+			free(e->car.data.ifE);
 			break;
 		case Nat:
 			v_destruct(e->car.data.nat->key);
@@ -270,6 +316,7 @@ void destroy_single_expr(Expr *e, struct ExprStack *trace)
 			}
 
 			free(e->car.data.nat->params);
+			free(e->car.data.nat);
 			break;
 		case Def:
 			v_destruct(e->car.data.str);

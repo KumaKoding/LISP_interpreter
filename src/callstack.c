@@ -4,6 +4,13 @@
 #include "callstack.h"
 #include "expr.h"
 #include "garbage.h"
+#include "my_malloc.h"
+
+#if TESTING
+	#define malloc(X) check_malloc(X, __FILE__, __LINE__, __FUNCTION__)
+	#define realloc(X, Y) check_realloc(X, Y, __FILE__, __LINE__, __FUNCTION__)
+	#define free(X) check_free(X, __FILE__, __LINE__, __FUNCTION__)
+#endif
 
 int count_exprs(Expr *e)
 {
@@ -44,7 +51,7 @@ void cs_push(int n_params, Expr **return_addr, struct CallStack *cs)
 	cs->len++;
 }
 
-void add_fn(Expr *e, Expr **return_addr, struct CallStack *cs)
+void add_fn(Expr *e, Expr **return_addr, struct CallStack *cs, struct Collector *gc)
 {
 	if(!e)
 	{
@@ -56,13 +63,13 @@ void add_fn(Expr *e, Expr **return_addr, struct CallStack *cs)
 
 	cs_push(n_params, return_addr, cs);
 
-	cs->stack[cs->len - 1].fn = e;
+	cs->stack[cs->len - 1].fn = new_copy(e, EXCLUDE_CDR, gc);
 
 	Expr *e_curr = e->cdr;
 
 	for(int i = 0; i < n_params; i++)
 	{
-		cs->stack[cs->len - 1].params[i] = e_curr;
+		cs->stack[cs->len - 1].params[i] = new_copy(e_curr, EXCLUDE_CDR, gc);
 
 		e_curr = e_curr->cdr;
 	}

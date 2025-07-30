@@ -5,6 +5,13 @@
 #include "callstack.h"
 #include "expr.h"
 #include "garbage.h"
+#include "my_malloc.h"
+
+#if TESTING
+	#define malloc(X) check_malloc(X, __FILE__, __LINE__, __FUNCTION__)
+	#define realloc(X, Y) check_realloc(X, Y, __FILE__, __LINE__, __FUNCTION__)
+	#define free(X) check_free(X, __FILE__, __LINE__, __FUNCTION__)
+#endif
 
 #define IS_NATIVE(function, target) vec_cmp_str(function.key, target, strlen(target))
 
@@ -112,6 +119,7 @@ void add_native(char *key, int n_args, struct CallStack *cs, struct Collector *g
 	nat->car.data.nat->n_filled = 0;
 	nat->car.data.nat->params = malloc(sizeof(Expr*) * n_args);
 
+	gc_push(gc, nat);
 	map_push(cs->stack[0].local_references, init_map_pair(nat->car.data.nat->key, nat, gc));
 }
 

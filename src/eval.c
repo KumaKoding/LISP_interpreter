@@ -7,6 +7,15 @@
 #include "callstack.h"
 #include "expr.h"
 #include "garbage.h"
+#include "my_malloc.h"
+
+#if TESTING
+	#define malloc(X) check_malloc(X, __FILE__, __LINE__, __FUNCTION__)
+	#define realloc(X, Y) check_realloc(X, Y, __FILE__, __LINE__, __FUNCTION__)
+	#define free(X) check_free(X, __FILE__, __LINE__, __FUNCTION__)
+#endif
+
+
 
 void shadow_variables(Vector *v, Expr *e, LocalMap *lm, struct Collector *gc)
 {
@@ -41,7 +50,7 @@ Expr *evaluate_frame(struct StackFrame f_curr, struct CallStack *cs, struct Coll
 			{
 				Expr *instructions = f_curr.fn->car.data.lam->instructions;
 				return_value = instructions;
-				add_fn(instructions, f_curr.return_addr, cs);
+				add_fn(instructions, f_curr.return_addr, cs, gc);
 
 				for(int i = 0; i < f_curr.local_references->len; i++)
 				{
@@ -66,7 +75,7 @@ Expr *evaluate_frame(struct StackFrame f_curr, struct CallStack *cs, struct Coll
 			{
 				for(int i = 0; i < f_curr.params_evaluated; i++)
 				{
-					f_curr.fn->car.data.lam->params[f_curr.fn->car.data.lam->n_filled] = f_curr.params[i];
+					f_curr.fn->car.data.lam->params[f_curr.fn->car.data.lam->n_filled] = new_copy(f_curr.params[i], EXCLUDE_CDR, gc);
 					f_curr.fn->car.data.lam->n_filled++;
 				}
 
@@ -77,7 +86,7 @@ Expr *evaluate_frame(struct StackFrame f_curr, struct CallStack *cs, struct Coll
 		case Nat:
 			for(int i = 0; i < f_curr.params_evaluated; i++)
 			{
-				f_curr.fn->car.data.nat->params[f_curr.fn->car.data.nat->n_filled] = f_curr.params[i];
+				f_curr.fn->car.data.nat->params[f_curr.fn->car.data.nat->n_filled] =  new_copy(f_curr.params[i], EXCLUDE_CDR, gc);
 				f_curr.fn->car.data.nat->n_filled++;
 			}
 
@@ -94,11 +103,11 @@ Expr *evaluate_frame(struct StackFrame f_curr, struct CallStack *cs, struct Coll
 		case IfE:
 			if(f_curr.params[0]->car.type != Fls && f_curr.params[0]->car.type != Nil)
 			{
-				add_fn(f_curr.fn->car.data.ifE->branch_true, f_curr.return_addr, cs);
+				add_fn(f_curr.fn->car.data.ifE->branch_true, f_curr.return_addr, cs, gc);
 			}
 			else 
 			{
-				add_fn(f_curr.fn->car.data.ifE->branch_false, f_curr.return_addr, cs);
+				add_fn(f_curr.fn->car.data.ifE->branch_false, f_curr.return_addr, cs, gc);
 			}
 
 			return_value = NULL;
@@ -108,6 +117,7 @@ Expr *evaluate_frame(struct StackFrame f_curr, struct CallStack *cs, struct Coll
 			return_value = malloc(sizeof(Expr));
 			return_value->car.type = Nil;
 			return_value->cdr = NULL;
+			gc_push(gc, return_value);
 
 			map_push(cs->stack[cs->len - 1].local_references, init_map_pair(f_curr.fn->car.data.str, f_curr.params[0], gc));
 
@@ -118,12 +128,18 @@ Expr *evaluate_frame(struct StackFrame f_curr, struct CallStack *cs, struct Coll
 			break;
 	}
 
+	for(int i = 0; i < f_curr.local_references->len; i++)
+	{
+		v_destruct(f_curr.local_references->map[i].v);
+	}
+
 	free(f_curr.local_references);
 
 	if(f_curr.params_available > 0)
 	{
 		free(f_curr.params);
 	}
+
 
 	return return_value;
 }
@@ -169,25 +185,21 @@ Expr* eval(Expr *e, struct CallStack *cs, struct Collector *gc)
 	{
 		if(e->car.data.lst)
 		{
-			add_fn(e->car.data.lst, &return_value, cs);
+			add_fn(e->car.data.lst, &return_value, cs, gc);
 		}
 		else 
 		{
-			add_fn(e, &return_value, cs);
+			add_fn(e, &return_value, cs, gc);
 		}
 	}
 	else
 	{
-		add_fn(e, &return_value, cs);
+		add_fn(e, &return_value, cs, gc);
 	}
 
 	while(cs->len > 1)
 	{
 		struct StackFrame *f_curr = &cs->stack[cs->len - 1];
-
-		// print_cs(*cs);
-		// printf("\n");
-
 
 		Expr *e_curr = NULL;
 		Expr **return_addr = NULL;
@@ -231,7 +243,7 @@ Expr* eval(Expr *e, struct CallStack *cs, struct Collector *gc)
 				}
 				else
 				{
-					add_fn(e_curr->car.data.lst, return_addr, cs);
+					add_fn(e_curr->car.data.lst, return_addr, cs, gc);
 				}
 			}
 			else if(e_curr->car.type == Idr)
@@ -267,7 +279,8 @@ Expr* eval(Expr *e, struct CallStack *cs, struct Collector *gc)
 		}
 	}
 
-	print_cs(*cs);
+	// print_cs(*cs);
+	// printf("\n");
 
 	return return_value;
 }

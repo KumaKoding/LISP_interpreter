@@ -6,13 +6,15 @@
 #include "input.h"
 #include "lexer.h"
 #include "expr.h"
+#include "my_malloc.h"
 
-// struct ExprStack
-// {
-//     int len;
-//     Expr *stack[MAX_EXPR_STACK_SIZE];
-// };
-//
+
+#if TESTING
+	#define malloc(X) check_malloc(X, __FILE__, __LINE__, __FUNCTION__)
+	#define realloc(X, Y) check_realloc(X, Y, __FILE__, __LINE__, __FUNCTION__)
+	#define free(X) check_free(X, __FILE__, __LINE__, __FUNCTION__)
+#endif
+
 struct OptionStack
 {
 	int len;
@@ -202,10 +204,14 @@ int validate_delimitation(struct TokenBuffer tokens, int t)
 		return 0;
 	}
 
-	if(tokens.tokens[t - 1] != O_Paren && tokens.tokens[t - 1] != Space && t != 0)
+	if(t != 0)
 	{
-		return 0;
+		if(tokens.tokens[t - 1] != O_Paren && tokens.tokens[t - 1] != Space)
+		{
+			return 0;
+		}
 	}
+
 
 	return 1;
 }
@@ -347,14 +353,19 @@ Expr *parse_special_forms(Expr *e)
 					else 
 					{
 						c->car.type = o->car.type;
+
 						if(o->car.data.lst)
 						{
 							c->car.data.lst = malloc(sizeof(Expr));
-						}
 
-						os_push(&options, 'I');
-						es_push(&orig, o->car.data.lst);
-						es_push(&copy, c->car.data.lst);
+							os_push(&options, 'I');
+							es_push(&orig, o->car.data.lst);
+							es_push(&copy, c->car.data.lst);
+						}
+						else 
+						{
+							c->car.data.lst = NULL;
+						}
 					}
 
 					break;
@@ -382,6 +393,8 @@ Expr *parse_special_forms(Expr *e)
 					break;
 			}
 
+			c->cdr = NULL;
+
 			if(option == 'I')
 			{
 				if(o->cdr)
@@ -402,7 +415,13 @@ Expr *parse_special_forms(Expr *e)
 	return final;
 }
 
-Expr *parse(struct safe_string clean_input, struct TokenBuffer tokens)
+struct Indices
+{
+	int c;
+	int t;
+};
+
+Expr *parse_single(struct safe_string clean_input, struct TokenBuffer tokens, struct Indices *indices)
 {
 	Expr *origin = malloc(sizeof(Expr));
 	origin->cdr = NULL;
@@ -410,40 +429,40 @@ Expr *parse(struct safe_string clean_input, struct TokenBuffer tokens)
 	struct ExprStack trace;
 	trace.len = 0;
 
-	int t = 0;
-	int c = 0;
-
 	Expr *e_curr = origin;
+	int depth = 0;
 
-	while(tokens.tokens[t] != End)
+	while(tokens.tokens[indices->t] != End)
 	{
-		if(!validate_delimitation(tokens, t))
+		if(!validate_delimitation(tokens, indices->t))
 		{
-			PARSE_ERROR(clean_input, c);
+			PARSE_ERROR(clean_input, indices->c);
 		}
 
-		if(tokens.tokens[t] == O_Paren)
+		if(tokens.tokens[indices->t] == O_Paren)
 		{
 			e_curr->car.type = Lst;
 			e_curr->car.data.lst = NULL;
 			e_curr->cdr = NULL;
 
 			es_push(&trace, e_curr);
+			depth++;
 
-			if(len_til_close(tokens, t))
+			if(len_til_close(tokens, indices->t))
 			{
 				e_curr->car.data.lst = malloc(sizeof(Expr));
 				e_curr = e_curr->car.data.lst;
 				e_curr->cdr = NULL;
 			}
 		}
-		else if(tokens.tokens[t] == C_Paren)
+		else if(tokens.tokens[indices->t] == C_Paren)
 		{
 			e_curr = es_pop(&trace);
+			depth--;
 		}
 		else 
 		{
-			switch(tokens.tokens[t]) 
+			switch(tokens.tokens[indices->t]) 
 			{
 				case O_Paren:
 					break;
@@ -455,43 +474,69 @@ Expr *parse(struct safe_string clean_input, struct TokenBuffer tokens)
 					break;
 				case Number:
 					e_curr->car.type = Num;
-					struct ParseNum num = parse_num(clean_input, c);
+					struct ParseNum num = parse_num(clean_input, indices->c);
 
 					e_curr->car.data.num = num.n;
 					e_curr->cdr = NULL;
 
-					c += num.offset - 1;
+					indices->c += num.offset - 1;
 					break;
 				case String:
 					e_curr->car.type = Str;
-					struct ParseVec str = parse_str(clean_input, c);
+					struct ParseVec str = parse_str(clean_input, indices->c);
 
 					e_curr->car.data.str = str.v;
 					e_curr->cdr = NULL;
 
-					c += str.offset - 1;
+					indices->c += str.offset - 1;
 					break;
 				case Ident:
 					e_curr->car.type = Idr;
-					struct ParseVec idr = parse_idr(clean_input, c);
+					struct ParseVec idr = parse_idr(clean_input, indices->c);
 
 					e_curr->car.data.str = idr.v;
 					e_curr->cdr = NULL;
 
-					c += idr.offset - 1;
+					indices->c += idr.offset - 1;
 					break;
 				case Undef:
-					PARSE_ERROR(clean_input, c);
+					PARSE_ERROR(clean_input, indices->c);
 					break;
 				case End:
 					break;
 			}
 		}
 
-		t++;
-		c++;
+		indices->t++;
+		indices->c++;
+
+		if(depth == 0)
+		{
+			break;
+		}
 	}
 
 	return origin;
 }
 
+struct ExprVector *parse(struct safe_string clean_input, struct TokenBuffer tokens)
+{
+	struct ExprVector *parsed_exprs = init_e_vec();
+
+	struct Indices indices = {0};
+
+	while(tokens.tokens[indices.t] != End)
+	{
+		if(tokens.tokens[indices.t] != Space)
+		{
+			e_vec_push(parsed_exprs, parse_single(clean_input, tokens, &indices));
+		}
+		else 
+		{
+			indices.t++;
+			indices.c++;
+		}
+	}
+
+	return parsed_exprs;
+}

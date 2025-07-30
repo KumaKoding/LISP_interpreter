@@ -4,20 +4,14 @@
 #include <stdint.h>
 
 typedef struct Expr Expr;
+struct ExprVector;
 struct CallStack;
-
-struct ExprVector
-{
-	Expr **exprs;
-	int n_exprs;
-	int max;
-};
 
 struct Collector 
 {
 	int allocs;
 	struct CallStack *roots;
-	struct ExprVector e_vec;
+	struct ExprVector *e_vec;
 	uint8_t *marks;
 };
 

@@ -26,5 +26,3 @@ clean:
 
 run: $(EXE)
 	@./$(EXE) input-advanced.lsp
-
--include $(OBJ:.o=.d)

@@ -2,22 +2,16 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "garbage.h"
 #include "expr.h"
+#include "garbage.h"
 #include "callstack.h"
+#include "my_malloc.h"
 
-#define INITIAL_EXPR_VECTOR_SIZE 32
-
-struct ExprVector init_e_vec()
-{
-	struct ExprVector e_vec;
-
-	e_vec.max = INITIAL_EXPR_VECTOR_SIZE;
-	e_vec.exprs = malloc(sizeof(Expr *) * INITIAL_EXPR_VECTOR_SIZE);
-	e_vec.n_exprs = 0;
-
-	return e_vec;
-}
+#if TESTING
+	#define malloc(X) check_malloc(X, __FILE__, __LINE__, __FUNCTION__)
+	#define realloc(X, Y) check_realloc(X, Y, __FILE__, __LINE__, __FUNCTION__)
+	#define free(X) check_free(X, __FILE__, __LINE__, __FUNCTION__)
+#endif
 
 struct Collector init_gc(struct CallStack *cs)
 {
@@ -30,21 +24,9 @@ struct Collector init_gc(struct CallStack *cs)
 	return gc;
 }
 
-void e_vec_push(struct ExprVector *e_vec, Expr *e)
-{
-	if(e_vec->n_exprs == e_vec->max)
-	{
-		e_vec->exprs = realloc(e_vec->exprs, sizeof(Expr *) * e_vec->max * 2);
-		e_vec->max *= 2;
-	}	
-
-	e_vec->exprs[e_vec->n_exprs] = e;
-	e_vec->n_exprs++;
-}
-
 void gc_push(struct Collector *gc, Expr *e)
 {
-	e_vec_push(&gc->e_vec, e);
+	e_vec_push(gc->e_vec, e);
 	e->mark = 0;
 	gc->allocs++;
 }
@@ -129,58 +111,64 @@ void mark(struct Collector *gc)
 
 void sweep(struct Collector *gc)
 {
-	struct ExprVector e_vec = init_e_vec();
+	struct ExprVector *e_vec = init_e_vec();
 
-	for(int i = 0; i < gc->e_vec.n_exprs; i++)
+	for(int i = 0; i < gc->e_vec->n_exprs; i++)
 	{
-		if(gc->e_vec.exprs[i]->mark)
+		if(gc->e_vec->exprs[i]->mark)
 		{
-			gc->e_vec.exprs[i]->mark = 0;
-			e_vec_push(&e_vec, gc->e_vec.exprs[i]);
+			gc->e_vec->exprs[i]->mark = 0;
+			e_vec_push(e_vec, gc->e_vec->exprs[i]);
 		}
 		else 
 		{
-			switch (gc->e_vec.exprs[i]->car.type) {
+			switch (gc->e_vec->exprs[i]->car.type) {
 				case Lst:
 					break;
 				case Lam:
-					for(int p = 0; p < gc->e_vec.exprs[i]->car.data.lam->n_args; p++)
+					for(int p = 0; p < gc->e_vec->exprs[i]->car.data.lam->n_args; p++)
 					{
-						v_destruct(gc->e_vec.exprs[i]->car.data.lam->p_keys[p]);
+						v_destruct(gc->e_vec->exprs[i]->car.data.lam->p_keys[p]);
 					}
 
-					free(gc->e_vec.exprs[i]->car.data.lam->params);
-					free(gc->e_vec.exprs[i]->car.data.lam->p_keys);
+					free(gc->e_vec->exprs[i]->car.data.lam->params);
+					free(gc->e_vec->exprs[i]->car.data.lam->p_keys);
+					free(gc->e_vec->exprs[i]->car.data.lam);
 
 					break;
 				case Nat:
-					v_destruct(gc->e_vec.exprs[i]->car.data.nat->key);
-					free(gc->e_vec.exprs[i]->car.data.nat->params);
+					v_destruct(gc->e_vec->exprs[i]->car.data.nat->key);
+					free(gc->e_vec->exprs[i]->car.data.nat->params);
+					free(gc->e_vec->exprs[i]->car.data.nat);
 
 					break;
 				case IfE:
+					free(gc->e_vec->exprs[i]->car.data.ifE);
 					break;
 				case Def:
-					v_destruct(gc->e_vec.exprs[i]->car.data.str);
+					v_destruct(gc->e_vec->exprs[i]->car.data.str);
 
 					break;
 				case Str:
-					v_destruct(gc->e_vec.exprs[i]->car.data.str);
+					v_destruct(gc->e_vec->exprs[i]->car.data.str);
 
 					break;
 				case Idr:
-					v_destruct(gc->e_vec.exprs[i]->car.data.str);
+					v_destruct(gc->e_vec->exprs[i]->car.data.str);
 
 					break;
 				default:
 					break;
 			}
 
-			free(gc->e_vec.exprs[i]);
+			free(gc->e_vec->exprs[i]);
+			gc->allocs--;
 		}
 	}
 
-	free(gc->e_vec.exprs);
+	free(gc->e_vec->exprs);
+	free(gc->e_vec);
+
 	gc->e_vec = e_vec;
 }
 

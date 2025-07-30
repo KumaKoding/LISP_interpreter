@@ -46,7 +46,7 @@ struct LocalMap
 
 
 void cs_push(int n_params, Expr **return_addr, struct CallStack *cs);
-void add_fn(Expr *e, Expr **return_addr, struct CallStack *cs);
+void add_fn(Expr *e, Expr **return_addr, struct CallStack *cs, struct Collector *gc);
 
 void map_push(LocalMap *lm, MapPair mp);
 LocalMap *init_map();

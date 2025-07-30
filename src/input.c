@@ -3,6 +3,15 @@
 #include <string.h>
 
 #include "input.h"
+#include "my_malloc.h"
+
+#if TESTING
+	#define malloc(X) check_malloc(X, __FILE__, __LINE__, __FUNCTION__)
+	#define realloc(X, Y) check_realloc(X, Y, __FILE__, __LINE__, __FUNCTION__)
+	#define free(X) check_free(X, __FILE__, __LINE__, __FUNCTION__)
+#endif
+
+
 
 #define IGNORE_CHARACTERS "\n\t\r"
 
@@ -10,12 +19,18 @@ int count_copies(char *raw, int index, int max_len)
 {
 	char target = raw[index];
 
+	if(index + 1 >= max_len)
+	{
+		return 0;
+	}
+
 	int ctr = 0;
 
-	while(raw[index + ctr + 1] == target && index + ctr + 1 <= max_len)
+	while(raw[index + ctr + 1] == target && index + ctr + 1 < max_len)
 	{
 		ctr++;
 	}
+
 
 	return ctr;
 }
